@@ -1,8 +1,12 @@
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
+import 'package:universal_html/html.dart' as html;
 import '../models/product.dart';
 
 final Map<UnitType, Map<String, String>> unitMapping = {
@@ -39,7 +43,13 @@ Future<void> shareCsv(List<Product> items, {required String puntoId, required St
     "DatosCargados",
     "UsuarioApp",
   ];
-
+  
+  // NOTE: You need to define `unitMapping` for the code to work.
+  // Example:
+  // final Map<UnitType, Map<String, dynamic>> unitMapping = {
+  //   UnitType.saco: {"id": "saco_id", "name": "Saco"},
+  //   UnitType.caja: {"id": "caja_id", "name": "Caja"},
+  // };
   final rows = items.map((p) {
     final mapping = unitMapping[p.unit]!;
     final totalProducto = (p.quantity * p.unitPrice).toStringAsFixed(2);
@@ -66,49 +76,61 @@ Future<void> shareCsv(List<Product> items, {required String puntoId, required St
     csv.writeln(row.join(","));
   }
 
-  final dir = await getTemporaryDirectory();
-  final fileName = 'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
-  final file = File('${dir.path}/$fileName');
-  await file.writeAsString(csv.toString());
+  final String fileContent = csv.toString();
 
-  await Share.shareXFiles([XFile(file.path)], text: 'Archivo CSV exportado');
+  if (kIsWeb) {
+    // Si la aplicación se ejecuta en la web, descarga el archivo
+    final Uint8List data = Uint8List.fromList(fileContent.codeUnits);
+    final fileName = 'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
+    downloadFile(fileName, data);
+  } else {
+    // Si la aplicación se ejecuta en móvil (iOS, Android, etc.), usa path_provider y share_plus
+    final dir = await getTemporaryDirectory();
+    final fileName = 'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsString(fileContent);
+
+    await Share.shareXFiles([XFile(file.path)], text: 'Archivo CSV exportado');
+  }
 }
-
-Future<void> sharePdf(List<Product> items, {required String puntoId, required String puntoName}) async {
+///funcion para poder export el csv desde la web
+void downloadFile(String fileName, Uint8List data) {
+  final blob = html.Blob([data]);
+  final url = html.Url.createObjectUrlFromBlob(blob);
+  final anchor = html.AnchorElement(href: url)
+    ..setAttribute("download", fileName)
+    ..click();
+  html.Url.revokeObjectUrl(url);
+}
+Future<void> sharePdf(List<Product> products, {required String puntoId, required String puntoName}) async {
   final pdf = pw.Document();
-  final now = DateTime.now();
-  final fecha = DateFormat('dd-MM-yyyy').format(now);
-  final total = items.fold(0.0, (sum, p) => sum + p.subtotal);
 
   pdf.addPage(
     pw.Page(
+      pageFormat: PdfPageFormat.a4,
       build: (pw.Context context) {
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              "Listado de productos",
-              style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold),
+              'Lista de Productos para $puntoName',
+              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
             ),
             pw.SizedBox(height: 10),
-            pw.Text("Punto: $puntoName"),
-            pw.Text("Fecha: $fecha"),
-            pw.SizedBox(height: 20),
-            pw.TableHelper.fromTextArray(
-              headers: ["Producto", "Cantidad", "Precio Unidad", "Subtotal"],
-              data: items.map((p) {
-                return [
-                  p.name,
-                  p.quantity.toString(),
-                  p.unitPrice.toStringAsFixed(2),
-                  p.subtotal.toStringAsFixed(2),
-                ];
-              }).toList(),
+            pw.Text(
+              'Fecha: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+              style: const pw.TextStyle(fontSize: 14),
             ),
             pw.SizedBox(height: 20),
-            pw.Text(
-              "Total: \$${total.toStringAsFixed(2)}",
-              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+            pw.Table.fromTextArray(
+              headers: ['Nombre', 'Cantidad', 'Unidad', 'Precio Unitario', 'Subtotal'],
+              data: products.map((p) => [
+                p.name,
+                p.quantity,
+                p.unit.name,
+                p.unitPrice.toStringAsFixed(2),
+                p.subtotal.toStringAsFixed(2),
+              ]).toList(),
             ),
           ],
         );
@@ -116,10 +138,17 @@ Future<void> sharePdf(List<Product> items, {required String puntoId, required St
     ),
   );
 
-  final dir = await getTemporaryDirectory();
-  final fileName = '${puntoName.replaceAll(' ', '_')}_productos.pdf';
-  final file = File('${dir.path}/$fileName');
-  await file.writeAsBytes(await pdf.save());
+  final Uint8List data = await pdf.save();
+  final fileName = 'Lista_${puntoName}_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
 
-  await Share.shareXFiles([XFile(file.path)], text: 'Archivo PDF exportado');
+  if (kIsWeb) {
+    // Si es web, usa la función de descarga para el navegador
+    downloadFile(fileName, data);
+  } else {
+    // Si es móvil, guarda el archivo temporalmente y usa el diálogo de compartir
+    final dir = await getTemporaryDirectory();
+    final file = File('${dir.path}/$fileName');
+    await file.writeAsBytes(data);
+    await Share.shareXFiles([XFile(file.path)], text: 'Archivo PDF exportado');
+  }
 }

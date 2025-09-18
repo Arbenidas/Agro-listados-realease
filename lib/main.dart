@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'pages/product_management_page.dart';
+import 'package:flutter_listados/widgets/product_modal.dart';
 
 void main() {
   runApp(const MyApp());
@@ -94,6 +94,7 @@ class _MyHomePageState extends State<MyHomePage> {
     "CH - El Paraíso, Cancha Techada de Parque Municipal El Paraiso": "Punto010",
     "CU - San Rafael Cedros, Frente a la Alcaldía de San Rafael Cedros": "Punto051",
     "LP - Zacatecoluca, Plaza Civica": "Punto024",
+    "APOPA":"Punto020"
   };
 
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_listados/widgets/ProductSearchSheet.dart';
+import 'package:universal_html/html.dart' as html;
 import '../models/product.dart';
 import '../utils/export_utils.dart';
 
@@ -19,11 +20,12 @@ class ProductManagementPage extends StatefulWidget {
 
 class _ProductManagementPageState extends State<ProductManagementPage> {
   final List<Product> _products = [];
+  bool _hasUnsavedChanges = false;
 
   final Map<String, String> productosDisponibles = {
     "APIO": "Producto002",
     "AJO": "fcd4b7e5",
-    "AYOTE": "0",
+    "AYOTE": "Producto043",
     "BROCOLI SENCILLO": "b5d35820",
     "BERENJENA": "Producto048",
     "CEBOLLA BLANCA": "Producto007",
@@ -35,23 +37,23 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     "GUISQUIL CHAPIN": "Producto014",
     "GUISQUIL INDIO PRIMERA": "Producto014",
     "CHILE JALAPEÑO": "Producto009",
-    "LECHUGA Grande": "f0c77c84",
+    "Lechuga Grande": "f0c77c84",
     "Lechuga Mediana": "Producto016",
-    "LIMON": "Producto023",
-    "PAPA BELLINA": "Producto024",
-    "PEPINO": "Producto027",
-    "PLATANO GRANDE": "Producto030",
+    "Limon": "Producto023",
+    "Papa Bellina": "Producto024",
+    "Pepino": "Producto027",
+    "Platano Grande": "Producto030",
     "PIPIAN DE PRIMERA": "cd11d087",
     "PIPIAN DE SEGUNDA": "2084fae4",
     "REMOLACHA": "Producto032",
     "REPOLLO": "Producto032",
     "TOMATE GRUESO": "Producto063",
     "TOMATE MEDIANO": "Producto037",
-    "ZANAHORIA": "Producto039",
+    "ZANAHORIA grande sin tallo": "Producto039",
     "ZUCCHINI": "Producto039",
     "YUCA": "Producto042",
     "BANANO": "Producto004",
-    "LICHA": "Producto015",
+    "Lichas": "Producto015",
     "JAMAICA": "Producto054",
     "MANZANA GALA": "d2713057",
     "MANZANA VERDE": "Producto052",
@@ -87,20 +89,88 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     "Mora (fruta)": "Producto059",
     "Mora monte": "f9d9dcc2",
     "Nance": "6dd71ced",
+    "Tamarindo": "Producto045",
+    "Platano mediano": "Producto031",
+    "Manzana Roja": "Producto021",
+    "Maracuya": "567bd74d",
+    "Brócoli doble": "b5d35820",
+    "Brócoli pequeño": "ef79a203",
+    "Anona": "77f72adb",
+    "Encurtido o curtido": "d30a38ff",
+    "Ciruela": "0a166eef",
+    "Dulce de panela": "26b4e0b6",
+    "Espinaca": "e6b567a6",
+    "Güisquil perulero": "c36ab341",
+    "Hierva buena": "Producto061",
+    "Huevo grande": "16f5d47d",
+    "Huevo mediano": "490ee12d",
+    "Huevos Extra Grandes": "3a1034ad",
+    "Huevos pequeños": "9e3deb6a",
+    "Jícama": "6e8b0360",
+    "Jocote": "be9be332",
+    "Jocote acido": "81c58d58",
+    "Jocote de azucaron": "defa9469",
+    "Lechuga escarola": "aef77fa0",
+    "Loroco": "Producto019",
+    "Manzana Pink Lady": "138a0457",
+    "Marshmellow": "c2466763",
+    "Olor": "e1e2e86d",
+    "Papa mexicana": "52a1a57d",
+    "Papa pequeña en red": "6d793ec7",
+    "Papa Russet": "9dbe65fe",
+    "Papa soloma": "20348300",
+    "Papaya": "Producto026",
+    "Pera": "a66f6a3a",
+    "Perejil": "5a43d485",
+    "Repollo morado": "5f03bb17",
+    "Sandía": "c9b1dcba",
+    "Mix de monte": "05aa25a1",
+    "Tomate de tercera": "7367ffb8",
+    "Uva Morada": "Producto044",
+    "Uva negra": "0f8714a2",
+    "Uva roja": "1924cd5a",
+    "Uva Verde": "e481f318",
+    "Zanahoria pequeña sin tallo": "Producto040",
   };
 
+  void _onBeforeUnload(html.Event event) {
+  if (_hasUnsavedChanges) {
+    // Cast the event to the correct type to access returnValue.
+    (event as html.BeforeUnloadEvent).returnValue = 'Are you sure you want to leave?';
+  }
+}
+
+  @override
+  void initState() {
+    super.initState();
+    // Add the listener for web platforms
+    html.window.addEventListener('beforeunload', _onBeforeUnload);
+  }
+
+  @override
+  void dispose() {
+    // Remove the listener to prevent memory leaks
+    html.window.removeEventListener('beforeunload', _onBeforeUnload);
+    super.dispose();
+  }
 
   void _addProduct(Product p) {
-    setState(() => _products.add(p));
+    setState(() {
+      _products.add(p);
+      _hasUnsavedChanges = true; // Set to true when a change is made
+    });
   }
 
   void _editProduct(int index, Product p) {
-    setState(() => _products[index] = p);
+    setState(() {
+      _products[index] = p;
+      _hasUnsavedChanges = true; // Set to true when a change is made
+    });
   }
 
   void _confirmDelete(int index) {
     showDialog(
-      context: context, // usar el context del Scaffold
+      context: context,
       builder: (_) => AlertDialog(
         title: const Text('Confirmar eliminación'),
         content: Text('¿Desea eliminar el producto "${_products[index].name}"?'),
@@ -123,7 +193,10 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   }
 
   void _deleteProduct(int index) {
-    setState(() => _products.removeAt(index));
+    setState(() {
+      _products.removeAt(index);
+      _hasUnsavedChanges = true; // Set to true when a change is made
+    });
   }
 
   void _showAddProductSheet() async {
@@ -145,6 +218,11 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
       return;
     }
 
+    // Set _hasUnsavedChanges to false since the list is being finalized
+    setState(() {
+      _hasUnsavedChanges = false;
+    });
+
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -155,7 +233,9 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
             onPressed: () {
               Navigator.pop(context);
               shareCsv(_products,
-                  puntoId: widget.puntoId, puntoName: widget.puntoName);
+                  puntoId: widget.puntoId,
+                  puntoName: widget.puntoName,
+                  context: context);
             },
             child: const Text('CSV'),
           ),
@@ -163,7 +243,9 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
             onPressed: () {
               Navigator.pop(context);
               sharePdf(_products,
-                  puntoId: widget.puntoId, puntoName: widget.puntoName);
+                  puntoId: widget.puntoId,
+                  puntoName: widget.puntoName,
+                  context: context);
             },
             child: const Text('PDF'),
           ),
@@ -174,6 +256,8 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Note: WillPopScope is not needed for the web version's main functionality.
+    // The html.window listener handles the browser's "beforeunload" event.
     return Scaffold(
       appBar: AppBar(title: Text(widget.puntoName)),
       body: Column(
@@ -217,15 +301,19 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                             style: const TextStyle(fontSize: 14),
                           ),
                           trailing: SizedBox(
-                            width: 100,
+                            width: 150,
                             child: Row(
                               mainAxisAlignment: MainAxisAlignment.end,
                               children: [
-                                Text(
-                                  '\$${p.subtotal.toStringAsFixed(2)}',
-                                  style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.blueAccent),
+                                Expanded(
+                                  child: Text(
+                                    '\$${p.subtotal.toStringAsFixed(2)}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blueAccent),
+                                    textAlign: TextAlign.right,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.edit, color: Colors.green),
@@ -236,7 +324,8 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                                       isScrollControlled: true,
                                       builder: (_) => ProductSearchSheet(
                                         initialProduct: p,
-                                        productosDisponibles: productosDisponibles,
+                                        productosDisponibles:
+                                            productosDisponibles,
                                       ),
                                     );
                                     if (edited != null) _editProduct(index, edited);

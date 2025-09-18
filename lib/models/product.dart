@@ -1,4 +1,4 @@
-enum UnitType { saco, caja, bolsa, quintal, unidad, bulto, fardo, bandeja, jabaJumbo }
+enum UnitType { Saco, Caja, Bolsa, Quintal, Unidad, Bulto, Fardo, Bandeja, JabaJumbo, Manojo, Docena, Canasto, Libra, CajaDoble, Ciento, BolsaDoble, Saco200, MedioQuintal, Saco400, Jaba, Arroba, Marqueta, Red, BolsaMedia }
 
 class Product {
   final String name;

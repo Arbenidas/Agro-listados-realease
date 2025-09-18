@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/product.dart';
 
-// ---------------- ProductSearchSheet ----------------
 class ProductSearchSheet extends StatefulWidget {
   final Map<String, String> productosDisponibles;
   final Product? initialProduct;
@@ -20,18 +19,56 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
   String? _name;
   String? _id;
   late UnitType _unit;
-  late int _quantity;
-  late double _unitPrice;
+  
+  final TextEditingController _quantityController = TextEditingController();
+  final TextEditingController _unitPriceController = TextEditingController();
+  
+  final FocusNode _quantityFocusNode = FocusNode();
+  final FocusNode _unitPriceFocusNode = FocusNode();
+  
+  final TextEditingController _autocompleteController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     final p = widget.initialProduct;
-    _name = p?.name;
-    _id = p?.id;
-    _unit = p?.unit ?? UnitType.saco;
-    _quantity = p?.quantity ?? 1;
-    _unitPrice = p?.unitPrice ?? 0.0;
+    if (p != null) {
+      _name = p.name;
+      _id = p.id;
+      _unit = p.unit;
+      _quantityController.text = p.quantity.toString();
+      _unitPriceController.text = p.unitPrice.toStringAsFixed(2);
+      _autocompleteController.text = p.name;
+    } else {
+      _name = null;
+      _id = null;
+      _unit = UnitType.Unidad;
+      _quantityController.text = '1';
+      _unitPriceController.text = '0.00';
+      _autocompleteController.text = '';
+    }
+
+    _quantityFocusNode.addListener(() {
+      if (_quantityFocusNode.hasFocus) {
+        _quantityController.clear();
+      }
+    });
+
+    _unitPriceFocusNode.addListener(() {
+      if (_unitPriceFocusNode.hasFocus) {
+        _unitPriceController.clear();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _quantityController.dispose();
+    _unitPriceController.dispose();
+    _quantityFocusNode.dispose();
+    _unitPriceFocusNode.dispose();
+    _autocompleteController.dispose();
+    super.dispose();
   }
 
   @override
@@ -46,22 +83,78 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<String>(
-                decoration: const InputDecoration(labelText: 'Producto'),
-                items: widget.productosDisponibles.keys
-                    .map((e) => DropdownMenuItem(value: e, child: Text(e)))
-                    .toList(),
-                initialValue: _name,
-                onChanged: (v) {
-                  setState(() {
-                    _name = v;
-                    _id = widget.productosDisponibles[v!];
+              // Barra de arrastre para indicar que el modal puede ser cerrado
+              Container(
+                margin: const EdgeInsets.only(bottom: 16.0),
+                height: 5,
+                width: 40,
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(5),
+                ),
+              ),
+              Autocomplete<String>(
+                optionsBuilder: (TextEditingValue textEditingValue) {
+                  if (textEditingValue.text == '') {
+                    return const Iterable<String>.empty();
+                  }
+                  return widget.productosDisponibles.keys.where((String option) {
+                    return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
                   });
+                },
+                onSelected: (String selection) {
+                  setState(() {
+                    _name = selection;
+                    _id = widget.productosDisponibles[selection]!;
+                  });
+                },
+                fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
+                  return TextFormField(
+                    controller: textEditingController,
+                    focusNode: focusNode,
+                    decoration: const InputDecoration(
+                      labelText: 'Buscar y agregar producto',
+                      hintText: 'Ej. Manzana',
+                      suffixIcon: Icon(Icons.search),
+                    ),
+                    onChanged: (text) {
+                      setState(() {
+                        _name = null;
+                        _id = null;
+                      });
+                    },
+                  );
+                },
+                optionsViewBuilder: (BuildContext context, AutocompleteOnSelected<String> onSelected, Iterable<String> options) {
+                  return Align(
+                    alignment: Alignment.topLeft,
+                    child: Material(
+                      elevation: 4.0,
+                      child: SizedBox(
+                        height: 200.0,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.all(8.0),
+                          itemCount: options.length,
+                          itemBuilder: (BuildContext context, int index) {
+                            final String option = options.elementAt(index);
+                            return GestureDetector(
+                              onTap: () {
+                                onSelected(option);
+                              },
+                              child: ListTile(
+                                title: Text(option),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  );
                 },
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<UnitType>(
-                decoration: const InputDecoration(labelText: 'Unidad'),
+                decoration: const InputDecoration(labelText: 'Unidad "saco", "bandeja"'),
                 value: _unit,
                 items: UnitType.values
                     .map((u) => DropdownMenuItem(value: u, child: Text(u.name)))
@@ -70,34 +163,36 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
               ),
               const SizedBox(height: 10),
               TextFormField(
-                initialValue: _quantity.toString(),
+                controller: _quantityController,
+                focusNode: _quantityFocusNode,
                 decoration: const InputDecoration(labelText: 'Cantidad'),
                 keyboardType: TextInputType.number,
-                onChanged: (v) => _quantity = int.tryParse(v) ?? 1,
               ),
               const SizedBox(height: 10),
               TextFormField(
-                initialValue: _unitPrice.toStringAsFixed(2),
+                controller: _unitPriceController,
+                focusNode: _unitPriceFocusNode,
                 decoration: const InputDecoration(
-                  labelText: 'Precio por unidad',
+                  labelText: 'Precio unitario',
                 ),
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                onChanged: (v) => _unitPrice = double.tryParse(v) ?? 0.0,
               ),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: (_name != null && _id != null)
                     ? () {
+                        final quantity = int.tryParse(_quantityController.text) ?? 1;
+                        final unitPrice = double.tryParse(_unitPriceController.text) ?? 0.0;
                         Navigator.pop(
                           context,
                           Product(
                             name: _name!,
                             id: _id!,
                             unit: _unit,
-                            quantity: _quantity,
-                            unitPrice: _unitPrice,
+                            quantity: quantity,
+                            unitPrice: unitPrice,
                           ),
                         );
                       }

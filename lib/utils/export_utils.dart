@@ -1,33 +1,54 @@
+// Archivo: lib/utils/export_utils.dart
+
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:universal_html/html.dart' as html;
+import 'package:archive/archive_io.dart';
+import 'package:path/path.dart' as p;
 import '../models/product.dart';
 
 final Map<UnitType, Map<String, String>> unitMapping = {
-  UnitType.quintal: {"id": "0e001ce3", "name": "QUINTAL"},
-  UnitType.bandeja: {"id": "b61df036", "name": "BANDEJA"},
-  UnitType.jabaJumbo: {"id": "ee464733", "name": "JABA JUMBO"},
-  UnitType.saco: {"id": "d3da911d", "name": "SACO"},
-  UnitType.bulto: {"id": "176bdd70", "name": "BULTO"},
-  UnitType.bolsa: {"id": "42dc4583", "name": "BOLSA"},
-  UnitType.fardo: {"id": "cd40923c", "name": "FARDO"},
-  UnitType.caja: {"id": "e2266e41", "name": "CAJA"},
-  UnitType.unidad: {
-    "id": "xxxxxx",
-    "name": "UNIDAD",
-  },
+  UnitType.Unidad: {"id": "c8836a89", "name": "Unidad"},
+  UnitType.Caja: {"id": "e2266e41", "name": "Caja"},
+  UnitType.CajaDoble: {"id": "0549f383", "name": "Caja doble"},
+  UnitType.Canasto: {"id": "328e367e", "name": "Canasto"},
+  UnitType.Ciento: {"id": "e3680387", "name": "Ciento"},
+  UnitType.Docena: {"id": "a7224a1b", "name": "Docena"},
+  UnitType.Bolsa: {"id": "42dc4583", "name": "Bolsa"},
+  UnitType.BolsaDoble: {"id": "6ec18920", "name": "Bolsa doble"},
+  UnitType.Bulto: {"id": "176bdd70", "name": "Bulto"},
+  UnitType.Saco: {"id": "d3da911d", "name": "Saco"},
+  UnitType.Saco200: {"id": "369b70ea", "name": "Saco 200"},
+  UnitType.Saco400: {"id": "d968a514", "name": "Saco 400"},
+  UnitType.Fardo: {"id": "cd40923c", "name": "Fardo"},
+  UnitType.Jaba: {"id": "c2b21d35", "name": "Jaba"},
+  UnitType.JabaJumbo: {"id": "ee464733", "name": "Jaba Jumbo"},
+  UnitType.Libra: {"id": "4eee07a0", "name": "Libra"},
+  UnitType.Quintal: {"id": "0e001ce3", "name": "1 Quintal"},
+  UnitType.MedioQuintal: {"id": "3fb9a892", "name": "1/2 Quintal"},
+  UnitType.Manojo: {"id": "efd2c64e", "name": "Manojo"},
+  UnitType.Bandeja: {"id": "b61df036", "name": "Bandeja"},
+  UnitType.Arroba: {"id": "5b6928cc", "name": "Arroba"},
+  UnitType.Marqueta: {"id": "7f9ee2aa", "name": "Marqueta"},
+  UnitType.Red: {"id": "1162b08e", "name": "Red"},
+  UnitType.BolsaMedia: {"id": "a6a66ed3", "name": "Bolsa media"},
 };
 
-Future<void> shareCsv(List<Product> items, {required String puntoId, required String puntoName}) async {
+// -------------------------------------------------------------
+// FUNCIONES DE GENERACIÓN EN SEGUNDO PLANO
+// -------------------------------------------------------------
+Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
+  final List<Product> items = data['items'];
+  final String puntoId = data['puntoId'];
   final now = DateTime.now().add(const Duration(days: 1));
   final csvFecha = DateFormat('dd/MM/yyyy').format(now);
-  final fileDate = DateFormat('dd-MM-yyyy').format(now);
 
   final headers = [
     "IdCargado",
@@ -43,17 +64,10 @@ Future<void> shareCsv(List<Product> items, {required String puntoId, required St
     "DatosCargados",
     "UsuarioApp",
   ];
-  
-  // NOTE: You need to define `unitMapping` for the code to work.
-  // Example:
-  // final Map<UnitType, Map<String, dynamic>> unitMapping = {
-  //   UnitType.saco: {"id": "saco_id", "name": "Saco"},
-  //   UnitType.caja: {"id": "caja_id", "name": "Caja"},
-  // };
+
   final rows = items.map((p) {
     final mapping = unitMapping[p.unit]!;
     final totalProducto = (p.quantity * p.unitPrice).toStringAsFixed(2);
-
     return [
       "",
       puntoId,
@@ -76,33 +90,12 @@ Future<void> shareCsv(List<Product> items, {required String puntoId, required St
     csv.writeln(row.join(","));
   }
 
-  final String fileContent = csv.toString();
-
-  if (kIsWeb) {
-    // Si la aplicación se ejecuta en la web, descarga el archivo
-    final Uint8List data = Uint8List.fromList(fileContent.codeUnits);
-    final fileName = 'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
-    downloadFile(fileName, data);
-  } else {
-    // Si la aplicación se ejecuta en móvil (iOS, Android, etc.), usa path_provider y share_plus
-    final dir = await getTemporaryDirectory();
-    final fileName = 'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsString(fileContent);
-
-    await Share.shareXFiles([XFile(file.path)], text: 'Archivo CSV exportado');
-  }
+  return Uint8List.fromList(csv.toString().codeUnits);
 }
-///funcion para poder export el csv desde la web
-void downloadFile(String fileName, Uint8List data) {
-  final blob = html.Blob([data]);
-  final url = html.Url.createObjectUrlFromBlob(blob);
-  final anchor = html.AnchorElement(href: url)
-    ..setAttribute("download", fileName)
-    ..click();
-  html.Url.revokeObjectUrl(url);
-}
-Future<void> sharePdf(List<Product> products, {required String puntoId, required String puntoName}) async {
+
+Future<Uint8List> _generatePdfInBackground(Map<String, dynamic> data) async {
+  final List<Product> products = data['products'];
+  final String puntoName = data['puntoName'];
   final pdf = pw.Document();
 
   pdf.addPage(
@@ -123,32 +116,266 @@ Future<void> sharePdf(List<Product> products, {required String puntoId, required
             ),
             pw.SizedBox(height: 20),
             pw.TableHelper.fromTextArray(
-              headers: ['Nombre', 'Cantidad', 'Unidad', 'Precio Unitario', 'Subtotal'],
-              data: products.map((p) => [
-                p.name,
-                p.quantity,
-                p.unit.name,
-                p.unitPrice.toStringAsFixed(2),
-                p.subtotal.toStringAsFixed(2),
-              ]).toList(),
+              headers: [
+                'Nombre',
+                'Cantidad',
+                'Unidad',
+                'Precio Unitario',
+                'Subtotal'
+              ],
+              data: products
+                  .map((p) => [
+                        p.name,
+                        p.quantity,
+                        p.unit.name,
+                        p.unitPrice.toStringAsFixed(2),
+                        p.subtotal.toStringAsFixed(2),
+                      ])
+                  .toList(),
             ),
           ],
         );
       },
     ),
   );
+  return await pdf.save();
+}
 
-  final Uint8List data = await pdf.save();
-  final fileName = 'Lista_${puntoName}_${DateFormat('yyyy-MM-dd').format(DateTime.now())}.pdf';
+// -------------------------------------------------------------
+// FUNCIONES PÚBLICAS PARA COMPARTIR
+// -------------------------------------------------------------
+Future<void> shareCsv(List<Product> items,
+    {required String puntoId,
+    required String puntoName,
+    required BuildContext context}) async {
+  await _prepareAndShare(
+    context: context,
+    products: items,
+    puntoId: puntoId,
+    puntoName: puntoName,
+    exportType: 'csv',
+  );
+}
 
-  if (kIsWeb) {
-    // Si es web, usa la función de descarga para el navegador
-    downloadFile(fileName, data);
-  } else {
-    // Si es móvil, guarda el archivo temporalmente y usa el diálogo de compartir
-    final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/$fileName');
-    await file.writeAsBytes(data);
-    await Share.shareXFiles([XFile(file.path)], text: 'Archivo PDF exportado');
+Future<void> sharePdf(List<Product> products,
+    {required String puntoId,
+    required String puntoName,
+    required BuildContext context}) async {
+  await _prepareAndShare(
+    context: context,
+    products: products,
+    puntoId: puntoId,
+    puntoName: puntoName,
+    exportType: 'pdf',
+  );
+}
+
+Future<void> shareBoth(List<Product> products,
+    {required String puntoId,
+    required String puntoName,
+    required BuildContext context}) async {
+  await _prepareAndShare(
+    context: context,
+    products: products,
+    puntoId: puntoId,
+    puntoName: puntoName,
+    exportType: 'both',
+  );
+}
+
+Future<void> shareZip(List<Product> products,
+    {required String puntoId,
+    required String puntoName,
+    required BuildContext context}) async {
+  await _prepareAndShare(
+    context: context,
+    products: products,
+    puntoId: puntoId,
+    puntoName: puntoName,
+    exportType: 'zip',
+  );
+}
+
+// -------------------------------------------------------------
+// FUNCIÓN CENTRAL PARA PREPARAR Y COMPARTIR
+// -------------------------------------------------------------
+Future<void> _prepareAndShare({
+  required BuildContext context,
+  required List<Product> products,
+  required String puntoId,
+  required String puntoName,
+  required String exportType,
+}) async {
+  _showLoadingDialog(context);
+  final now = DateTime.now().add(const Duration(days: 1));
+  final fileDate = DateFormat('dd-MM-yyyy').format(now);
+
+  try {
+    List<XFile> filesToShare = [];
+    String message = 'Aquí están las listas de productos.';
+    String title = 'Listas de Productos';
+
+    switch (exportType) {
+      case 'csv':
+        final csvData = await compute(_generateCsvInBackground, {
+          'items': products,
+          'puntoId': puntoId,
+        });
+        final csvFileName =
+            'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
+
+        if (kIsWeb) {
+          filesToShare.add(XFile.fromData(csvData,
+              name: csvFileName, mimeType: 'text/csv'));
+        } else {
+          final tempDir = await getTemporaryDirectory();
+          final csvFile = File(p.join(tempDir.path, csvFileName));
+          await csvFile.writeAsBytes(csvData);
+          filesToShare.add(XFile(csvFile.path, name: csvFileName));
+        }
+        break;
+
+      case 'pdf':
+        final pdfData = await compute(_generatePdfInBackground, {
+          'products': products,
+          'puntoName': puntoName,
+        });
+        final pdfFileName = 'Lista_${puntoName}_$fileDate.pdf';
+
+        if (kIsWeb) {
+          filesToShare.add(XFile.fromData(pdfData,
+              name: pdfFileName, mimeType: 'application/pdf'));
+        } else {
+          final tempDir = await getTemporaryDirectory();
+          final pdfFile = File(p.join(tempDir.path, pdfFileName));
+          await pdfFile.writeAsBytes(pdfData);
+          filesToShare.add(XFile(pdfFile.path, name: pdfFileName));
+        }
+        break;
+
+      case 'both':
+        final csvData = await compute(_generateCsvInBackground, {
+          'items': products,
+          'puntoId': puntoId,
+        });
+        final pdfData = await compute(_generatePdfInBackground, {
+          'products': products,
+          'puntoName': puntoName,
+        });
+        final csvFileName =
+            'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
+        final pdfFileName = 'Lista_${puntoName}_$fileDate.pdf';
+
+        if (kIsWeb) {
+          filesToShare.add(XFile.fromData(csvData,
+              name: csvFileName, mimeType: 'text/csv'));
+          filesToShare.add(XFile.fromData(pdfData,
+              name: pdfFileName, mimeType: 'application/pdf'));
+        } else {
+          final tempDir = await getTemporaryDirectory();
+          final csvFile = File(p.join(tempDir.path, csvFileName));
+          final pdfFile = File(p.join(tempDir.path, pdfFileName));
+          await csvFile.writeAsBytes(csvData);
+          await pdfFile.writeAsBytes(pdfData);
+          filesToShare.add(XFile(csvFile.path, name: csvFileName));
+          filesToShare.add(XFile(pdfFile.path, name: pdfFileName));
+        }
+        break;
+
+      case 'zip':
+        final csvData = await compute(_generateCsvInBackground, {
+          'items': products,
+          'puntoId': puntoId,
+        });
+        final pdfData = await compute(_generatePdfInBackground, {
+          'products': products,
+          'puntoName': puntoName,
+        });
+        final zipFileName =
+            'Despacho_${puntoName.replaceAll(' ', '_')}_$fileDate.zip';
+
+        if (kIsWeb) {
+          final archive = Archive()
+            ..addFile(ArchiveFile('DESPACHO.csv', csvData.length, csvData))
+            ..addFile(ArchiveFile('LISTA.pdf', pdfData.length, pdfData));
+          final zipData = Uint8List.fromList(ZipEncoder().encode(archive)!);
+filesToShare.add(XFile.fromData(
+  zipData,
+  name: zipFileName,
+  mimeType: 'application/zip',
+));
+
+          final tempDir = await getTemporaryDirectory();
+          final tempFilePath = p.join(tempDir.path, zipFileName);
+          final zipEncoder = ZipFileEncoder();
+          zipEncoder.create(tempFilePath);
+          zipEncoder.addArchiveFile(
+              ArchiveFile('DESPACHO.csv', csvData.length, csvData));
+          zipEncoder.addArchiveFile(
+              ArchiveFile('LISTA.pdf', pdfData.length, pdfData));
+          zipEncoder.close();
+          filesToShare.add(XFile(tempFilePath, name: zipFileName));
+        }
+        break;
+    }
+
+    if (context.mounted) Navigator.of(context).pop();
+
+    if (kIsWeb) {
+      await _shareFilesWeb(
+          context: context, files: filesToShare, title: title, message: message);
+    } else {
+      await Share.shareXFiles(filesToShare,
+          subject: title,
+          sharePositionOrigin: const Rect.fromLTWH(0, 0, 1, 1));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al compartir: $e')),
+      );
+    }
   }
+}
+
+Future<void> _shareFilesWeb({
+  required BuildContext context,
+  required List<XFile> files,
+  required String title,
+  required String message,
+}) async {
+  try {
+    for (var xfile in files) {
+      final bytes = await xfile.readAsBytes();
+      final blob = html.Blob([bytes]);
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute("download", xfile.name ?? "file")
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    }
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Archivos descargados en Web')),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al compartir en Web: $e')),
+      );
+    }
+  }
+}
+
+void _showLoadingDialog(BuildContext context) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (BuildContext context) {
+      return const Center(child: CircularProgressIndicator());
+    },
+  );
 }

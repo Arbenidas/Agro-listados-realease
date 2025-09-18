@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/widgets/product_modal.dart';
-import 'package:flutter_listados/pages/product_management_page.dart' hide ProductManagementPage;
+import 'package:flutter_listados/pages/product_management_page.dart';
 
 void main() {
   runApp(const MyApp());

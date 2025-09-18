@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_listados/models/units.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -14,33 +15,6 @@ import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 import '../models/product.dart';
-
-final Map<UnitType, Map<String, String>> unitMapping = {
-  UnitType.Unidad: {"id": "c8836a89", "name": "Unidad"},
-  UnitType.Caja: {"id": "e2266e41", "name": "Caja"},
-  UnitType.CajaDoble: {"id": "0549f383", "name": "Caja doble"},
-  UnitType.Canasto: {"id": "328e367e", "name": "Canasto"},
-  UnitType.Ciento: {"id": "e3680387", "name": "Ciento"},
-  UnitType.Docena: {"id": "a7224a1b", "name": "Docena"},
-  UnitType.Bolsa: {"id": "42dc4583", "name": "Bolsa"},
-  UnitType.BolsaDoble: {"id": "6ec18920", "name": "Bolsa doble"},
-  UnitType.Bulto: {"id": "176bdd70", "name": "Bulto"},
-  UnitType.Saco: {"id": "d3da911d", "name": "Saco"},
-  UnitType.Saco200: {"id": "369b70ea", "name": "Saco 200"},
-  UnitType.Saco400: {"id": "d968a514", "name": "Saco 400"},
-  UnitType.Fardo: {"id": "cd40923c", "name": "Fardo"},
-  UnitType.Jaba: {"id": "c2b21d35", "name": "Jaba"},
-  UnitType.JabaJumbo: {"id": "ee464733", "name": "Jaba Jumbo"},
-  UnitType.Libra: {"id": "4eee07a0", "name": "Libra"},
-  UnitType.Quintal: {"id": "0e001ce3", "name": "1 Quintal"},
-  UnitType.MedioQuintal: {"id": "3fb9a892", "name": "1/2 Quintal"},
-  UnitType.Manojo: {"id": "efd2c64e", "name": "Manojo"},
-  UnitType.Bandeja: {"id": "b61df036", "name": "Bandeja"},
-  UnitType.Arroba: {"id": "5b6928cc", "name": "Arroba"},
-  UnitType.Marqueta: {"id": "7f9ee2aa", "name": "Marqueta"},
-  UnitType.Red: {"id": "1162b08e", "name": "Red"},
-  UnitType.BolsaMedia: {"id": "a6a66ed3", "name": "Bolsa media"},
-};
 
 Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
   final List<Product> items = data['items'];
@@ -96,6 +70,10 @@ Future<Uint8List> _generatePdfInBackground(Map<String, dynamic> data) async {
   final String puntoName = data['puntoName'];
   final pdf = pw.Document();
 
+  // ✅ Calcular totales
+  final totalQuantity = products.fold<int>(0, (sum, p) => sum + p.quantity);
+  final totalPrice = products.fold<double>(0.0, (sum, p) => sum + p.subtotal);
+
   pdf.addPage(
     pw.Page(
       pageFormat: PdfPageFormat.a4,
@@ -115,21 +93,56 @@ Future<Uint8List> _generatePdfInBackground(Map<String, dynamic> data) async {
             pw.SizedBox(height: 20),
             pw.TableHelper.fromTextArray(
               headers: [
+                '', // ✅ Columna para el checkbox
                 'Nombre',
                 'Cantidad',
                 'Unidad',
                 'Precio Unitario',
                 'Subtotal'
               ],
+              cellAlignment: pw.Alignment.centerLeft,
+              headerAlignment: pw.Alignment.centerLeft,
+              columnWidths: {
+                0: const pw.FlexColumnWidth(0.5), // Ancho para el checkbox
+                1: const pw.FlexColumnWidth(2.5),
+                2: const pw.FlexColumnWidth(1),
+                3: const pw.FlexColumnWidth(1.2),
+                4: const pw.FlexColumnWidth(1.5),
+                5: const pw.FlexColumnWidth(1.5),
+              },
               data: products
                   .map((p) => [
+                        '', // ✅ Espacio en blanco para el checkbox
                         p.name,
-                        p.quantity,
+                        pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.quantity.toString())),
                         p.unit.name,
-                        p.unitPrice.toStringAsFixed(2),
-                        p.subtotal.toStringAsFixed(2),
+                        pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.unitPrice.toStringAsFixed(2))),
+                        pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.subtotal.toStringAsFixed(2))),
                       ])
                   .toList(),
+            ),
+            pw.SizedBox(height: 30),
+            // ✅ Nuevo apartado de totales
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Total Bultos:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                    pw.SizedBox(height: 5),
+                    pw.Text(totalQuantity.toString(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 20)),
+                  ],
+                ),
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.end,
+                  children: [
+                    pw.Text('Precio Total:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
+                    pw.SizedBox(height: 5),
+                    pw.Text('\$${totalPrice.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 20)),
+                  ],
+                ),
+              ],
             ),
           ],
         );

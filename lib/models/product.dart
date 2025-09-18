@@ -1,7 +1,5 @@
 // Archivo: models/product.dart
 
-import 'dart:convert';
-
 enum UnitType {
   Unidad,
   Caja,

@@ -1,5 +1,12 @@
+// Archivo: product_management_page.dart
+// (This file is correct, no changes needed here)
+
+// Archivo: lib/widgets/ProductSearchSheet.dart
+
 import 'package:flutter/material.dart';
+import 'package:flutter_listados/models/products_data.dart';
 import '../models/product.dart';
+// Mantén esta importación
 
 class ProductSearchSheet extends StatefulWidget {
   final Map<String, String> productosDisponibles;
@@ -106,6 +113,8 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
                   setState(() {
                     _name = selection;
                     _id = widget.productosDisponibles[selection]!;
+                    // ✅ Lógica agregada: actualiza la unidad por defecto
+                    _unit = defaultUnits[selection] ?? UnitType.Unidad;
                   });
                 },
                 fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
@@ -155,7 +164,7 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
               const SizedBox(height: 10),
               DropdownButtonFormField<UnitType>(
                 decoration: const InputDecoration(labelText: 'Unidad "saco", "bandeja"'),
-                initialValue: _unit,
+                value: _unit,
                 items: UnitType.values
                     .map((u) => DropdownMenuItem(value: u, child: Text(u.name)))
                     .toList(),

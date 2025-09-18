@@ -155,7 +155,7 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
               const SizedBox(height: 10),
               DropdownButtonFormField<UnitType>(
                 decoration: const InputDecoration(labelText: 'Unidad "saco", "bandeja"'),
-                value: _unit,
+                initialValue: _unit,
                 items: UnitType.values
                     .map((u) => DropdownMenuItem(value: u, child: Text(u.name)))
                     .toList(),

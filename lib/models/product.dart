@@ -1,19 +1,74 @@
-enum UnitType { Saco, Caja, Bolsa, Quintal, Unidad, Bulto, Fardo, Bandeja, JabaJumbo, Manojo, Docena, Canasto, Libra, CajaDoble, Ciento, BolsaDoble, Saco200, MedioQuintal, Saco400, Jaba, Arroba, Marqueta, Red, BolsaMedia }
+// Archivo: models/product.dart
+
+import 'dart:convert';
+
+enum UnitType {
+  Unidad,
+  Caja,
+  CajaDoble,
+  Canasto,
+  Ciento,
+  Docena,
+  Bolsa,
+  BolsaDoble,
+  Bulto,
+  Saco,
+  Saco200,
+  Saco400,
+  Fardo,
+  Jaba,
+  JabaJumbo,
+  Libra,
+  Quintal,
+  MedioQuintal,
+  Manojo,
+  Bandeja,
+  Arroba,
+  Marqueta,
+  Red,
+  BolsaMedia,
+}
 
 class Product {
+  final String id;
   final String name;
+  final double unitPrice;
   final UnitType unit;
   final int quantity;
-  final double unitPrice;
-  final String id;
 
   Product({
+    required this.id,
     required this.name,
+    required this.unitPrice,
     required this.unit,
     required this.quantity,
-    required this.unitPrice,
-    required this.id,
   });
 
-  double get subtotal => quantity * unitPrice;
+  double get subtotal => unitPrice * quantity;
+
+  // Convierte un objeto Product en un Map para serializarlo
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'unitPrice': unitPrice,
+      'unit': unit.index, // Guarda el enum como un índice entero
+      'quantity': quantity,
+    };
+  }
+
+  // Crea un objeto Product a partir de un Map (desde un JSON)
+  factory Product.fromJson(Map<String, dynamic> json) {
+    return Product(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      unitPrice: json['unitPrice'] is int
+          ? (json['unitPrice'] as int).toDouble()
+          : json['unitPrice'] as double,
+      unit: UnitType.values[json['unit'] as int],
+      quantity: json['quantity'] is int
+          ? (json['quantity'] as int).toInt()
+          : json['quantity'] as int,
+    );
+  }
 }

@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/product.dart';
 
 final Map<UnitType, Map<String, String>> unitMapping = {
@@ -41,9 +42,6 @@ final Map<UnitType, Map<String, String>> unitMapping = {
   UnitType.BolsaMedia: {"id": "a6a66ed3", "name": "Bolsa media"},
 };
 
-// -------------------------------------------------------------
-// FUNCIONES DE GENERACIÓN EN SEGUNDO PLANO
-// -------------------------------------------------------------
 Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
   final List<Product> items = data['items'];
   final String puntoId = data['puntoId'];
@@ -141,9 +139,6 @@ Future<Uint8List> _generatePdfInBackground(Map<String, dynamic> data) async {
   return await pdf.save();
 }
 
-// -------------------------------------------------------------
-// FUNCIONES PÚBLICAS PARA COMPARTIR
-// -------------------------------------------------------------
 Future<void> shareCsv(List<Product> items,
     {required String puntoId,
     required String puntoName,
@@ -170,19 +165,6 @@ Future<void> sharePdf(List<Product> products,
   );
 }
 
-Future<void> shareBoth(List<Product> products,
-    {required String puntoId,
-    required String puntoName,
-    required BuildContext context}) async {
-  await _prepareAndShare(
-    context: context,
-    products: products,
-    puntoId: puntoId,
-    puntoName: puntoName,
-    exportType: 'both',
-  );
-}
-
 Future<void> shareZip(List<Product> products,
     {required String puntoId,
     required String puntoName,
@@ -196,9 +178,6 @@ Future<void> shareZip(List<Product> products,
   );
 }
 
-// -------------------------------------------------------------
-// FUNCIÓN CENTRAL PARA PREPARAR Y COMPARTIR
-// -------------------------------------------------------------
 Future<void> _prepareAndShare({
   required BuildContext context,
   required List<Product> products,
@@ -209,77 +188,31 @@ Future<void> _prepareAndShare({
   _showLoadingDialog(context);
   final now = DateTime.now().add(const Duration(days: 1));
   final fileDate = DateFormat('dd-MM-yyyy').format(now);
+  String title = '';
+  Uint8List? fileData;
+  String fileName = '';
+  String mimeType = '';
 
   try {
-    List<XFile> filesToShare = [];
-    String message = 'Aquí están las listas de productos.';
-    String title = 'Listas de Productos';
-
     switch (exportType) {
       case 'csv':
-        final csvData = await compute(_generateCsvInBackground, {
+        fileData = await compute(_generateCsvInBackground, {
           'items': products,
           'puntoId': puntoId,
         });
-        final csvFileName =
-            'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
-
-        if (kIsWeb) {
-          filesToShare.add(XFile.fromData(csvData,
-              name: csvFileName, mimeType: 'text/csv'));
-        } else {
-          final tempDir = await getTemporaryDirectory();
-          final csvFile = File(p.join(tempDir.path, csvFileName));
-          await csvFile.writeAsBytes(csvData);
-          filesToShare.add(XFile(csvFile.path, name: csvFileName));
-        }
+        fileName = 'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
+        mimeType = 'text/csv';
+        title = 'Lista de Productos (CSV)';
         break;
 
       case 'pdf':
-        final pdfData = await compute(_generatePdfInBackground, {
+        fileData = await compute(_generatePdfInBackground, {
           'products': products,
           'puntoName': puntoName,
         });
-        final pdfFileName = 'Lista_${puntoName}_$fileDate.pdf';
-
-        if (kIsWeb) {
-          filesToShare.add(XFile.fromData(pdfData,
-              name: pdfFileName, mimeType: 'application/pdf'));
-        } else {
-          final tempDir = await getTemporaryDirectory();
-          final pdfFile = File(p.join(tempDir.path, pdfFileName));
-          await pdfFile.writeAsBytes(pdfData);
-          filesToShare.add(XFile(pdfFile.path, name: pdfFileName));
-        }
-        break;
-
-      case 'both':
-        final csvData = await compute(_generateCsvInBackground, {
-          'items': products,
-          'puntoId': puntoId,
-        });
-        final pdfData = await compute(_generatePdfInBackground, {
-          'products': products,
-          'puntoName': puntoName,
-        });
-        final csvFileName =
-            'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
-        final pdfFileName = 'Lista_${puntoName}_$fileDate.pdf';
-
-        if (kIsWeb) {
-          filesToShare.add(XFile.fromData(csvData,
-              name: csvFileName, mimeType: 'text/csv'));
-          filesToShare.add(XFile.fromData(pdfData,
-              name: pdfFileName, mimeType: 'application/pdf'));
-        } else {
-          final tempDir = await getTemporaryDirectory();
-          final csvFile = File(p.join(tempDir.path, csvFileName));
-          final pdfFile = File(p.join(tempDir.path, pdfFileName));
-          await csvFile.writeAsBytes(csvData);
-          await pdfFile.writeAsBytes(pdfData);
-          filesToShare.add(XFile(csvFile.path, name: csvFileName));
-          filesToShare.add(XFile(pdfFile.path, name: pdfFileName));
-        }
+        fileName = 'Lista_${puntoName}_$fileDate.pdf';
+        mimeType = 'application/pdf';
+        title = 'Lista de Productos (PDF)';
         break;
 
       case 'zip':
@@ -291,81 +224,114 @@ Future<void> _prepareAndShare({
           'products': products,
           'puntoName': puntoName,
         });
-        final zipFileName =
-            'Despacho_${puntoName.replaceAll(' ', '_')}_$fileDate.zip';
-
-        if (kIsWeb) {
-          final archive = Archive()
-            ..addFile(ArchiveFile('DESPACHO.csv', csvData.length, csvData))
-            ..addFile(ArchiveFile('LISTA.pdf', pdfData.length, pdfData));
-          final zipData = Uint8List.fromList(ZipEncoder().encode(archive)!);
-filesToShare.add(XFile.fromData(
-  zipData,
-  name: zipFileName,
-  mimeType: 'application/zip',
-));
-
-          final tempDir = await getTemporaryDirectory();
-          final tempFilePath = p.join(tempDir.path, zipFileName);
-          final zipEncoder = ZipFileEncoder();
-          zipEncoder.create(tempFilePath);
-          zipEncoder.addArchiveFile(
-              ArchiveFile('DESPACHO.csv', csvData.length, csvData));
-          zipEncoder.addArchiveFile(
-              ArchiveFile('LISTA.pdf', pdfData.length, pdfData));
-          zipEncoder.close();
-          filesToShare.add(XFile(tempFilePath, name: zipFileName));
-        }
+        
+        final archive = Archive();
+        archive.addFile(ArchiveFile('${puntoName}_$fileDate.csv', csvData.length, csvData));
+        archive.addFile(ArchiveFile('${puntoName}_$fileDate.pdf', pdfData.length, pdfData));
+        fileData = Uint8List.fromList(ZipEncoder().encode(archive)!);
+        fileName = 'Despacho_${puntoName.replaceAll(' ', '_')}_$fileDate.zip';
+        mimeType = 'application/zip';
+        title = 'Archivos de Despacho (ZIP)';
         break;
     }
 
     if (context.mounted) Navigator.of(context).pop();
 
-    if (kIsWeb) {
-      await _shareFilesWeb(
-          context: context, files: filesToShare, title: title, message: message);
-    } else {
-      await Share.shareXFiles(filesToShare,
-          subject: title,
-          sharePositionOrigin: const Rect.fromLTWH(0, 0, 1, 1));
+    if (fileData != null) {
+      if (kIsWeb) {
+        // En la web, se fuerza la descarga para todos los tipos de archivo.
+        final blob = html.Blob([fileData], mimeType);
+        final url = html.Url.createObjectUrlFromBlob(blob);
+        final anchor = html.AnchorElement(href: url)
+          ..setAttribute("download", fileName)
+          ..click();
+        html.Url.revokeObjectUrl(url);
+
+      } else {
+        // Lógica de compartir en móvil con fallback para guardar el archivo
+        final tempDir = await getTemporaryDirectory();
+        final tempFile = File(p.join(tempDir.path, fileName));
+        await tempFile.writeAsBytes(fileData);
+        final filesToShare = [XFile(tempFile.path, name: fileName)];
+        
+        bool sharedSuccessfully = false;
+        try {
+          await Share.shareXFiles(filesToShare,
+            subject: title,
+            sharePositionOrigin: const Rect.fromLTWH(0, 0, 1, 1));
+          sharedSuccessfully = true;
+        } catch (e) {
+          debugPrint("Error o cancelación al compartir: $e");
+        }
+
+        if (context.mounted) {
+          if (sharedSuccessfully) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('$title compartido exitosamente')),
+            );
+          } else {
+            // Lógica de fallback: preguntar al usuario si desea guardar
+            final result = await showDialog<bool>(
+              context: context,
+              barrierDismissible: false,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Compartir Cancelado'),
+                content: const Text('¿Deseas guardar el archivo en tu dispositivo?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(false),
+                    child: const Text('Cancelar'),
+                  ),
+                  ElevatedButton(
+                    onPressed: () => Navigator.of(ctx).pop(true),
+                    child: const Text('Guardar'),
+                  ),
+                ],
+              ),
+            );
+
+            if (result == true) {
+              final status = await Permission.storage.request();
+              if (status.isGranted) {
+                // Guarda el archivo en un directorio público accesible
+                final directory = await getExternalStorageDirectory();
+                if (directory != null) {
+                  final newPath = p.join(directory.path, fileName);
+                  await tempFile.copy(newPath);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Archivo guardado en ${directory.path}')),
+                    );
+                  }
+                }
+              } else {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Permiso denegado para guardar archivo')),
+                  );
+                }
+              }
+            } else {
+              // El usuario no quiso guardar, no hacemos nada
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Operación cancelada')),
+                );
+              }
+            }
+          }
+        }
+      }
     }
   } catch (e) {
     if (context.mounted) {
-      Navigator.of(context).pop();
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error al compartir: $e')),
       );
     }
-  }
-}
-
-Future<void> _shareFilesWeb({
-  required BuildContext context,
-  required List<XFile> files,
-  required String title,
-  required String message,
-}) async {
-  try {
-    for (var xfile in files) {
-      final bytes = await xfile.readAsBytes();
-      final blob = html.Blob([bytes]);
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute("download", xfile.name ?? "file")
-        ..click();
-      html.Url.revokeObjectUrl(url);
-    }
-
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Archivos descargados en Web')),
-      );
-    }
-  } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al compartir en Web: $e')),
-      );
+  } finally {
+    if (context.mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
     }
   }
 }

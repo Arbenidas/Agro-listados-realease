@@ -211,49 +211,59 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   }
 
   void _finalizeList() {
-    if (_products.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No hay productos en la lista")),
-      );
-      return;
-    }
-
-    // Set _hasUnsavedChanges to false since the list is being finalized
-    setState(() {
-      _hasUnsavedChanges = false;
-    });
-
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Exportar lista'),
-        content: const Text('Elija el formato de exportación:'),
-        actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              shareCsv(_products,
-                  puntoId: widget.puntoId,
-                  puntoName: widget.puntoName,
-                  context: context);
-            },
-            child: const Text('CSV'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              sharePdf(_products,
-                  puntoId: widget.puntoId,
-                  puntoName: widget.puntoName,
-                  context: context);
-            },
-            child: const Text('PDF'),
-          ),
-        ],
-      ),
+  if (_products.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("No hay productos en la lista")),
     );
+    return;
   }
 
+  // Set _hasUnsavedChanges to false since the list is being finalized
+  setState(() {
+    _hasUnsavedChanges = false;
+  });
+
+  showDialog(
+    context: context,
+    builder: (_) => AlertDialog(
+      title: const Text('Exportar lista'),
+      content: const Text('Elija el formato de exportación:'),
+      actions: [
+        // TextButton(
+        //   onPressed: () {
+        //     Navigator.pop(context);
+        //     shareCsv(_products,
+        //         puntoId: widget.puntoId,
+        //         puntoName: widget.puntoName,
+        //         context: context);
+        //   },
+        //   child: const Text('CSV'),
+        // ),
+        // TextButton(
+        //   onPressed: () {
+        //     Navigator.pop(context);
+        //     sharePdf(_products,
+        //         puntoId: widget.puntoId,
+        //         puntoName: widget.puntoName,
+        //         context: context);
+        //   },
+        //   child: const Text('PDF'),
+        // ),
+        // **Nueva opción para exportar como ZIP**
+        TextButton(
+          onPressed: () {
+            Navigator.pop(context);
+            shareZip(_products,
+                puntoId: widget.puntoId,
+                puntoName: widget.puntoName,
+                context: context);
+          },
+          child: const Text('Descargar Archivos'),
+        ),
+      ],
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     // Note: WillPopScope is not needed for the web version's main functionality.
@@ -345,24 +355,49 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                     },
                   ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
             color: Colors.grey.shade100,
             child: Row(
               children: [
                 Expanded(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.add),
-                    label: const Text('Agregar Producto'),
-                    onPressed: _showAddProductSheet,
+                  child: SizedBox(
+                    height: 55,
+                    child: ElevatedButton.icon(
+                      onPressed: _showAddProductSheet,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blueAccent,
+                        foregroundColor: Colors.white, // Color de texto
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      icon: const Icon(Icons.add_circle_outline, size: 28),
+                      label: const Text(
+                        'Agregar Producto',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.check),
-                    label: const Text('Finalizar Lista'),
-                    onPressed: _finalizeList,
+                  child: SizedBox(
+                    height: 55,
+                    child: ElevatedButton.icon(
+                      onPressed: _finalizeList,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white, // Color de texto
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(15),
+                        ),
+                      ),
+                      icon: const Icon(Icons.check_circle_outline, size: 28),
+                      label: const Text(
+                        'Finalizar Lista',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
                   ),
                 ),
               ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_listados/widgets/product_modal.dart';
+import 'package:flutter_listados/pages/product_management_page.dart' hide ProductManagementPage;
 
 void main() {
   runApp(const MyApp());
@@ -100,7 +101,10 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
-    _filteredPuntos = puntos;
+    _filteredPuntos = Map.fromEntries(
+      puntos.entries.toList()
+        ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase())),
+    );
     _searchController.addListener(_filterPuntos);
   }
 
@@ -114,9 +118,10 @@ class _MyHomePageState extends State<MyHomePage> {
   void _filterPuntos() {
     final query = _searchController.text.toLowerCase();
     setState(() {
+      final sortedEntries = puntos.entries.toList()
+        ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
       _filteredPuntos = Map.fromEntries(
-        puntos.entries
-            .where((entry) => entry.key.toLowerCase().contains(query)),
+        sortedEntries.where((entry) => entry.key.toLowerCase().contains(query)),
       );
     });
   }
@@ -143,72 +148,43 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           ),
           Expanded(
-            child: GridView.builder(
+            child: ListView.builder(
               padding: const EdgeInsets.all(16),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 16,
-                crossAxisSpacing: 16,
-                childAspectRatio: 3 / 2,
-              ),
               itemCount: _filteredPuntos.length,
               itemBuilder: (context, index) {
                 final entry = _filteredPuntos.entries.elementAt(index);
-                return InkWell(
-                  onTap: () {
-                    FocusScope.of(context).unfocus();
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => ProductManagementPage(
-                          puntoId: entry.value,
-                          puntoName: entry.key,
+                return Card(
+                  elevation: 4,
+                  margin: const EdgeInsets.symmetric(vertical: 8),
+                  child: InkWell(
+                    onTap: () {
+                      FocusScope.of(context).unfocus();
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProductManagementPage(
+                            puntoId: entry.value,
+                            puntoName: entry.key,
+                          ),
+                        ),
+                      );
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: ListTile(
+                      contentPadding: const EdgeInsets.all(16),
+                      leading: Icon(
+                        Icons.storefront_outlined,
+                        color: Colors.deepPurple,
+                        size: 32,
+                      ),
+                      title: Text(
+                        entry.key,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 18, // Aumenta el tamaño de la fuente
                         ),
                       ),
-                    );
-                  },
-                  borderRadius: BorderRadius.circular(12),
-                  child: Card(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 4,
-                    shadowColor: Colors.deepPurple.shade100,
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.storefront_outlined,
-                            color: Colors.deepPurple,
-                            size: 28,
-                          ),
-                          const SizedBox(height: 10),
-                          Expanded(
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              alignment: Alignment.topLeft,
-                              child: Text(
-                                entry.key,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            'ID: ${entry.value}',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey,
-                            ),
-                          ),
-                        ],
-                      ),
+                      trailing: const Icon(Icons.arrow_forward_ios),
                     ),
                   ),
                 );

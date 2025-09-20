@@ -1,12 +1,14 @@
 // Archivo: lib/pages/bulk_product_entry_page.dart
 // Actualizado para generar el PDF en segundo plano y prevenir el congelamiento.
 
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_listados/data/lista_productos.dart';
 import 'package:flutter_listados/models/default_units.dart';
 import 'package:flutter_listados/models/product.dart';
 import 'package:flutter_listados/utils/generador_pdf.dart';
+
 import '../widgets/product_entry_row.dart';
 
 // ✅ Tarea pesada para crear el PDF, ejecutada en segundo plano
@@ -37,7 +39,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
   void initState() {
     super.initState();
     if (widget.currentProducts.isEmpty) {
-        productosDisponibles.entries.forEach((entry) {
+        for (var entry in productosDisponibles.entries) {
           final productName = entry.key;
           _tempProductsState[productName] = Product(
             id: entry.value,
@@ -46,12 +48,12 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
             unitPrice: 0.0,
             unit: defaultUnits[productName] ?? UnitType.Unidad,
           );
-        });
+        }
     } else {
         for (var p in widget.currentProducts) {
           _tempProductsState[p.name] = p;
         }
-        productosDisponibles.entries.forEach((entry) {
+        for (var entry in productosDisponibles.entries) {
           final productName = entry.key;
           if (!_tempProductsState.containsKey(productName)) {
              _tempProductsState[productName] = Product(
@@ -62,7 +64,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
               unit: defaultUnits[productName] ?? UnitType.Unidad,
             );
           }
-        });
+        }
     }
 
     _sortedProductNames = _tempProductsState.keys.toList()

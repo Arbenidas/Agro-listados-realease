@@ -1,6 +1,6 @@
-import 'package:agro_listados/models/puntos_despacho.dart';
-import 'package:agro_listados/pages/product_management_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_listados/models/puntos_despacho.dart';
+import 'package:flutter_listados/pages/product_management_page.dart';
 import 'package:package_info_plus/package_info_plus.dart'; // ✅ Importado para obtener la versión de la app
 import 'package:shared_preferences/shared_preferences.dart'; // ✅ Importado para guardar la versión
 import 'package:flutter/foundation.dart'; // ✅ Importado para kIsWeb

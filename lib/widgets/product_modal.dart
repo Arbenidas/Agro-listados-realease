@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_listados/models/default_units.dart';
 import 'package:flutter_listados/models/product.dart';
 
+
 class ProductSearchSheet extends StatefulWidget {
   final Map<String, String> productosDisponibles;
   final Product? initialProduct; // ✅ Ahora es opcional y para edición

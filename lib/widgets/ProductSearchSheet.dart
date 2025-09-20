@@ -1,13 +1,13 @@
-// lib/widgets/product_search_sheet.dart
+// Archivo: lib/widgets/product_search_sheet.dart
+// Actualizado para usar la única fuente de datos de unidades
 
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/models/default_units.dart';
+import 'package:flutter_listados/data/units.dart'; // ✅ Nueva importación
 import 'package:flutter_listados/models/product.dart';
-// ignore: depend_on_referenced_packages
 
 class ProductSearchSheet extends StatefulWidget {
   final Map<String, String> productosDisponibles;
-  final Product? initialProduct; // ✅ Ahora es opcional y para edición
+  final Product? initialProduct;
 
   const ProductSearchSheet({
     super.key,
@@ -46,7 +46,7 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
     } else {
       _name = null;
       _id = null;
-      _unit = UnitType.Unidad; // Unidad por defecto si no hay producto inicial
+      _unit = UnitType.Unidad;
       _quantityController.text = '1';
       _unitPriceController.text = '0.00';
       _autocompleteController.text = '';
@@ -54,7 +54,6 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
 
     _quantityFocusNode.addListener(() {
       if (_quantityFocusNode.hasFocus) {
-        // Seleccionar todo el texto al obtener el foco para facilitar la edición
         _quantityController.selection = TextSelection(baseOffset: 0, extentOffset: _quantityController.text.length);
       }
     });
@@ -80,7 +79,6 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
     final quantity = int.tryParse(_quantityController.text) ?? 0;
     final unitPrice = double.tryParse(_unitPriceController.text) ?? 0.0;
 
-    // Validación básica
     if (_name == null || _id == null || quantity <= 0 || unitPrice < 0) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Por favor, complete todos los campos correctamente.')),
@@ -126,8 +124,6 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 20),
-              // El Autocomplete se usa principalmente para seleccionar un producto si es nuevo.
-              // Si es un producto existente, solo muestra el nombre.
               if (widget.initialProduct == null)
                 Autocomplete<String>(
                   optionsBuilder: (TextEditingValue textEditingValue) {
@@ -142,11 +138,11 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
                     setState(() {
                       _name = selection;
                       _id = widget.productosDisponibles[selection]!;
-                      _unit = defaultUnits[selection] ?? UnitType.Unidad; // Unidad por defecto
+                      _unit = defaultUnits[selection] ?? UnitType.Unidad;
                     });
                   },
                   fieldViewBuilder: (BuildContext context, TextEditingController textEditingController, FocusNode focusNode, VoidCallback onFieldSubmitted) {
-                    _autocompleteController.text = textEditingController.text; // Sincroniza el controller del autocomplete
+                    _autocompleteController.text = textEditingController.text;
                     return TextFormField(
                       controller: textEditingController,
                       focusNode: focusNode,
@@ -194,7 +190,6 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
                   },
                 )
               else
-                // Si es un producto existente, solo mostramos el nombre
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 8.0),
                   child: Text(
@@ -238,7 +233,7 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
                   decimal: true,
                 ),
                 textInputAction: TextInputAction.done,
-                onFieldSubmitted: (_) => _saveProduct(), // Guardar al pulsar "Done" en el último campo
+                onFieldSubmitted: (_) => _saveProduct(),
               ),
               const SizedBox(height: 20),
               Row(

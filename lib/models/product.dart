@@ -1,6 +1,5 @@
-// Archivo: lib/models/product.dart
-// Actualizado con el método copyWith
-
+// lib/models/product.dart
+// ... (Aquí iría la definición de Product y UnitType)
 enum UnitType {
   Unidad,
   Caja,
@@ -31,60 +30,68 @@ enum UnitType {
 class Product {
   final String id;
   final String name;
+  final int quantity;
   final double unitPrice;
   final UnitType unit;
-  final int quantity;
 
-  Product({
+  double get subtotal => quantity * unitPrice;
+
+  const Product({
     required this.id,
     required this.name,
+    required this.quantity,
     required this.unitPrice,
     required this.unit,
-    required this.quantity,
   });
 
-  double get subtotal => unitPrice * quantity;
-
-  // ✅ Método copyWith añadido
   Product copyWith({
     String? id,
     String? name,
+    int? quantity,
     double? unitPrice,
     UnitType? unit,
-    int? quantity,
   }) {
     return Product(
       id: id ?? this.id,
       name: name ?? this.name,
+      quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       unit: unit ?? this.unit,
-      quantity: quantity ?? this.quantity,
     );
   }
 
-  // Convierte un objeto Product en un Map para serializarlo
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
-      'unitPrice': unitPrice,
-      'unit': unit.index, // Guarda el enum como un índice entero
       'quantity': quantity,
+      'unitPrice': unitPrice,
+      'unit': unit.index, // Guardar el índice del enum
     };
   }
 
-  // Crea un objeto Product a partir de un Map (desde un JSON)
   factory Product.fromJson(Map<String, dynamic> json) {
     return Product(
       id: json['id'] as String,
       name: json['name'] as String,
-      unitPrice: json['unitPrice'] is int
-          ? (json['unitPrice'] as int).toDouble()
-          : json['unitPrice'] as double,
-      unit: UnitType.values[json['unit'] as int],
-      quantity: json['quantity'] is int
-          ? (json['quantity'] as int).toInt()
-          : json['quantity'] as int,
+      quantity: json['quantity'] as int,
+      unitPrice: json['unitPrice'] as double,
+      unit: UnitType.values[json['unit'] as int], // Restaurar el enum por índice
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Product &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          quantity == other.quantity &&
+          unitPrice == other.unitPrice &&
+          unit == other.unit;
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ name.hashCode ^ quantity.hashCode ^ unitPrice.hashCode ^ unit.hashCode;
 }

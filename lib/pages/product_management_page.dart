@@ -1,26 +1,23 @@
 // Archivo: lib/pages/product_management_page.dart
-// Modificado para integrar la página tipo Excel Y mantener el botón "Agregar Producto"
+// Modificado: Se restauran los botones flotantes y se añade espacio para evitar obstrucciones.
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_listados/data/lista_productos.dart';
-import 'package:flutter_listados/models/product.dart';
-import 'package:flutter_listados/pages/bulk_product_entry_page.dart';
-import 'package:flutter_listados/widgets/product_modal.dart';
-import 'package:universal_html/html.dart' as html;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../utils/export_utils.dart';
-// Si 'productosDisponibles' no está directamente en el scope, asegúrate de importarlo
+import 'package:flutter/material.dart';
+import 'package:flutter_listados/data/dispatch_points.dart';
+import 'package:flutter_listados/data/products_data.dart';
+import 'package:flutter_listados/models/product.dart';
+import 'package:flutter_listados/utils/export_utils.dart';
+import 'package:flutter_listados/widgets/product_modal.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'bulk_product_entry_page.dart';
 
 class ProductManagementPage extends StatefulWidget {
-  final String puntoId;
-  final String puntoName;
+  final String? initialPuntoName;
 
   const ProductManagementPage({
     super.key,
-    required this.puntoId,
-    required this.puntoName,
+    this.initialPuntoName,
   });
 
   @override
@@ -28,224 +25,200 @@ class ProductManagementPage extends StatefulWidget {
 }
 
 class _ProductManagementPageState extends State<ProductManagementPage> {
-  final List<Product> _products = [];
-  bool _hasUnsavedChanges = false;
-  late String _storageKey;
-
-  void _onBeforeUnload(html.Event event) {
-    if (_hasUnsavedChanges) {
-      (event as html.BeforeUnloadEvent).returnValue =
-          'Are you sure you want to leave?';
-    }
-  }
+  List<Product> _manualProducts = [];
+  List<Product> _bulkEntryProducts = [];
+  String? _selectedPunto;
 
   @override
   void initState() {
     super.initState();
-    _storageKey = 'products_list_${widget.puntoId}';
-    _loadProducts();
-    if (kIsWeb) {
-      html.window.addEventListener('beforeunload', _onBeforeUnload);
-    }
-  }
-
-  @override
-  void dispose() {
-    if (kIsWeb) {
-      html.window.removeEventListener('beforeunload', _onBeforeUnload);
-    }
-    super.dispose();
-  }
-
-  Future<void> _saveProducts() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_products.isEmpty) {
-      await prefs.remove(_storageKey);
-      debugPrint('Lista de productos vacía. Datos borrados del caché.');
+    if (widget.initialPuntoName != null) {
+      _selectedPunto = widget.initialPuntoName;
+      _saveSelectedPunto(widget.initialPuntoName);
     } else {
-      final productsJson =
-          jsonEncode(_products.map((p) => p.toJson()).toList());
-      await prefs.setString(_storageKey, productsJson);
-      debugPrint('Lista de productos guardada en la clave: $_storageKey');
+      _loadPuntosDespacho();
+    }
+    _loadProducts();
+  }
+
+  Future<void> _saveSelectedPunto(String? puntoName) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (puntoName != null) {
+      await prefs.setString('selectedPunto', puntoName);
+    } else {
+      await prefs.remove('selectedPunto');
+    }
+  }
+
+  Future<void> _loadPuntosDespacho() async {
+    final prefs = await SharedPreferences.getInstance();
+    final puntoString = prefs.getString('selectedPunto');
+    if (puntoString != null) {
+      setState(() {
+        _selectedPunto = puntoString;
+      });
     }
   }
 
   Future<void> _loadProducts() async {
     final prefs = await SharedPreferences.getInstance();
-    final savedProducts = prefs.getString(_storageKey);
-    debugPrint('Intentando cargar lista de la clave: $_storageKey');
-    if (savedProducts != null && savedProducts.isNotEmpty) {
-      try {
-        final List<dynamic> productsJson = jsonDecode(savedProducts);
-        setState(() {
-          _products.clear();
-          _products.addAll(productsJson
-              .map((p) => Product.fromJson(p as Map<String, dynamic>))
-              .toList());
-        });
-        debugPrint('Lista de productos cargada exitosamente.');
-      } catch (e) {
-        debugPrint('Error al decodificar JSON guardado: $e');
-        await prefs.remove(_storageKey);
-        debugPrint('Datos de caché corruptos borrados.');
+    final manualProductsJson = prefs.getStringList('manualProducts');
+    final bulkEntryProductsJson = prefs.getStringList('bulkEntryProducts');
+
+    setState(() {
+      if (manualProductsJson != null) {
+        _manualProducts = manualProductsJson
+            .map((item) => Product.fromJson(jsonDecode(item)))
+            .toList();
       }
-    } else {
-      debugPrint('No se encontraron datos guardados en la clave: $_storageKey');
-    }
+      if (bulkEntryProductsJson != null) {
+        _bulkEntryProducts = bulkEntryProductsJson
+            .map((item) => Product.fromJson(jsonDecode(item)))
+            .toList();
+      }
+    });
   }
 
-  void _addProduct(Product p) {
+  Future<void> _saveProducts() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+        'manualProducts', _manualProducts.map((item) => jsonEncode(item.toJson())).toList());
+    await prefs.setStringList(
+        'bulkEntryProducts', _bulkEntryProducts.map((item) => jsonEncode(item.toJson())).toList());
+  }
+
+  void _addManualProduct(Product newProduct) {
     setState(() {
-      _products.add(p);
-      _hasUnsavedChanges = true;
+      final existingIndex = _manualProducts.indexWhere(
+        (p) => p.id == newProduct.id && p.unitPrice == newProduct.unitPrice,
+      );
+
+      if (existingIndex != -1) {
+        final existingProduct = _manualProducts[existingIndex];
+        _manualProducts[existingIndex] = existingProduct.copyWith(
+          quantity: existingProduct.quantity + newProduct.quantity,
+        );
+      } else {
+        _manualProducts.add(newProduct);
+      }
+      _manualProducts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     });
     _saveProducts();
   }
 
-  void _editProduct(int index, Product p) {
-    setState(() {
-      _products[index] = p;
-      _hasUnsavedChanges = true;
-    });
-    _saveProducts();
-  }
-
-  void _confirmDelete(int index) {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Confirmar eliminación'),
-        content: Text('¿Desea eliminar el producto "${_products[index].name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () {
-              _deleteProduct(index);
-              Navigator.of(context).pop();
-            },
-            child: const Text('Eliminar'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteProduct(int index) {
-    setState(() {
-      _products.removeAt(index);
-      _hasUnsavedChanges = true;
-    });
-    _saveProducts();
-  }
-
-  // ✅ _showAddProductSheet reintegrada
-  void _showAddProductSheet() async {
-    final result = await showModalBottomSheet<Product>(
+  void _editProduct(int index, List<Product> productList) async {
+    final initialProduct = productList[index];
+    final result = await showModalBottomSheet<Product?>(
       context: context,
       isScrollControlled: true,
       builder: (_) => ProductSearchSheet(
-        productosDisponibles: productosDisponibles, // ✅ Pasa la lista de productos
+        productosDisponibles: productosDisponibles,
+        initialProduct: initialProduct,
       ),
     );
-    if (result != null) _addProduct(result);
-  }
-
-  // ✅ Función para abrir la página tipo Excel
-  void _showBulkProductEntryPage() async {
-    final result = await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => BulkProductEntryPage(
-          currentProducts: List<Product>.from(_products), // Pasa una copia para evitar modificaciones directas
-        ),
-      ),
-    );
-
-    if (result != null && result is List<Product>) {
+    if (result != null) {
       setState(() {
-        _products.clear();
-        _products.addAll(result);
-        _hasUnsavedChanges = true;
+        productList[index] = result;
+        productList.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
       });
       _saveProducts();
     }
   }
 
-  void _finalizeList() {
-    if (_products.isEmpty) {
+  void _deleteProduct(int index, List<Product> productList, String listName) {
+    setState(() {
+      productList.removeAt(index);
+    });
+    _saveProducts();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Producto de $listName eliminado.')),
+    );
+  }
+
+  void _navigateToBulkEntry() async {
+    final updatedBulkProducts = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => BulkProductEntryPage(
+          currentProducts: _bulkEntryProducts,
+        ),
+      ),
+    );
+    if (updatedBulkProducts != null) {
+      setState(() {
+        _bulkEntryProducts = updatedBulkProducts;
+      });
+      _saveProducts();
+    }
+  }
+
+  Future<void> _showExportDialog() async {
+    final allProductsForExport = [..._manualProducts, ..._bulkEntryProducts];
+    if (allProductsForExport.isEmpty || _selectedPunto == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("No hay productos en la lista")),
+        const SnackBar(
+          content: Text('Debe haber productos en la lista y un punto seleccionado para exportar.'),
+        ),
       );
       return;
     }
 
-    _hasUnsavedChanges = false;
-    _clearSavedProducts();
+    allProductsForExport.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final String puntoId = puntosDespacho[_selectedPunto]!;
 
     showDialog(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('Exportar lista'),
-        content: const Text('Elija el formato de exportación:'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Cancelar'),
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Descargar archivo'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  icon: const Icon(Icons.archive),
+                  label: const Text('Descargar archivo'),
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                    shareZip(allProductsForExport, puntoId: puntoId, puntoName: _selectedPunto!, context: context);
+                  },
+                ),
+              ),
+            ],
           ),
-          TextButton(
-            onPressed: () async {
-              await shareZip(
-                _products,
-                puntoId: widget.puntoId,
-                puntoName: widget.puntoName,
-                context: context,
-              );
-              if (context.mounted) _showCompletionDialog();
-            },
-            child: const Text('ZIP'),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Future<void> _clearSavedProducts() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_storageKey);
-    debugPrint('Datos de caché borrados para la clave: $_storageKey');
-  }
-
-  void _showCompletionDialog() {
+  void _showDeleteConfirmationDialog() {
     showDialog(
       context: context,
-      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
-          title: const Text('Operación completada'),
-          content: const Text(
-              '¿Deseas permanecer en esta lista o comenzar una nueva?'),
-          actions: [
+          title: const Text('¿Estás seguro?'),
+          content: const Text('Esta acción borrará todas las listas de productos de forma permanente.'),
+          actions: <Widget>[
             TextButton(
+              child: const Text('Cancelar'),
               onPressed: () {
                 Navigator.of(context).pop();
               },
-              child: const Text('Seguir editando la lista'),
             ),
-            ElevatedButton(
+            TextButton(
+              child: const Text('Sí, borrar'),
               onPressed: () {
-                setState(() {
-                  _products.clear();
-                });
-                _clearSavedProducts();
-                Navigator.of(context).pop(); // Cierra el diálogo
                 Navigator.of(context).pop();
+                setState(() {
+                  _manualProducts.clear();
+                  _bulkEntryProducts.clear();
+                });
+                _saveProducts();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Todas las listas borradas.')),
+                );
               },
-              child: const Text('Salir y borrar la lista'),
             ),
           ],
         );
@@ -255,228 +228,165 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    final totalQuantity =
-        _products.fold<int>(0, (sum, product) => sum + product.quantity);
-    final totalPrice = _products.fold<double>(
-        0.0, (sum, product) => sum + product.subtotal);
+    final combinedProducts = [..._manualProducts, ..._bulkEntryProducts];
+    combinedProducts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+    final totalQuantity = combinedProducts.fold(0.0, (sum, product) => sum + product.quantity);
+    final totalPrice = combinedProducts.fold(0.0, (sum, product) => sum + (product.quantity * product.unitPrice));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          widget.puntoName,
-          style: const TextStyle(
-            fontSize: 24,
-            fontWeight: FontWeight.bold,
-            shadows: [
-              Shadow(
-                blurRadius: 2.0,
-                color: Colors.black38,
-                offset: Offset(1, 1),
-              ),
-            ],
-          ),
-        ),
+        title: Text(_selectedPunto != null ? 'Productos (${_selectedPunto!})' : 'Gestión de Productos'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.grid_on), // ✅ Botón para la entrada tipo Excel
-            onPressed: _showBulkProductEntryPage,
-            tooltip: 'Entrada tipo Excel',
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _products.isEmpty
-                ? const Center(
-                    child: Text(
-                      'No hay productos agregados.',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  )
-                : ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _products.length,
-                    itemBuilder: (context, index) {
-                      final p = _products[index];
-                      return Card(
-                        elevation: 4,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        margin: const EdgeInsets.symmetric(vertical: 8),
-                        child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 12),
-                          leading: CircleAvatar(
-                            backgroundColor: Colors.deepPurple.shade100,
-                            child: Text(p.quantity.toString(),
-                                style: const TextStyle(
-                                    color: Colors.black,
-                                    fontWeight: FontWeight.bold)),
-                          ),
-                          title: Text(
-                            p.name,
-                            style: const TextStyle(
-                                fontWeight: FontWeight.bold, fontSize: 16),
-                          ),
-                          subtitle: Text(
-                            '${p.unit.name} x \$${p.unitPrice.toStringAsFixed(2)}',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          trailing: SizedBox(
-                            width: 150,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    '\$${p.subtotal.toStringAsFixed(2)}',
-                                    style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.blueAccent),
-                                    textAlign: TextAlign.right,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                                IconButton(
-                                  icon:
-                                      const Icon(Icons.edit, color: Colors.green),
-                                  onPressed: () async {
-                                    // Usamos _showAddProductSheet para editar también
-                                    final edited =
-                                        await showModalBottomSheet<Product>(
-                                      context: context,
-                                      isScrollControlled: true,
-                                      builder: (_) => ProductSearchSheet(
-                                        initialProduct: p,
-                                        productosDisponibles:
-                                            productosDisponibles,
-                                      ),
-                                    );
-                                    if (edited != null) {
-                                      _editProduct(index, edited);
-                                    }
-                                  },
-                                  tooltip: 'Editar',
-                                ),
-                                IconButton(
-                                  icon:
-                                      const Icon(Icons.delete, color: Colors.red),
-                                  onPressed: () => _confirmDelete(index),
-                                  tooltip: 'Eliminar',
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          if (_products.isNotEmpty)
-            Card(
-              elevation: 4,
-              margin: const EdgeInsets.all(16),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (String result) {
+              if (result == 'export') {
+                _showExportDialog();
+              } else if (result == 'delete') {
+                _showDeleteConfirmationDialog();
+              }
+            },
+            itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'export',
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Total Bultos:',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '$totalQuantity',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        const Text(
-                          'Precio Total:',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '\$${totalPrice.toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green.shade700,
-                          ),
-                        ),
-                      ],
-                    ),
+                    Icon(Icons.download, color: Colors.blue),
+                    SizedBox(width: 8),
+                    Text('Descargar archivo'),
                   ],
                 ),
               ),
-            ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            color: Colors.grey.shade100,
-            child: Row(
-              children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 55,
-                    child: ElevatedButton.icon(
-                      onPressed: _showAddProductSheet, // ✅ Botón "Agregar Producto" reintegrado
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                      ),
-                      icon: const Icon(Icons.add_circle_outline, size: 28),
-                      label: const Text(
-                        'Agregar Producto',
-                        style: TextStyle(fontSize: 16),
-                      ),
+              const PopupMenuItem<String>(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(Icons.delete, color: Colors.red),
+                    SizedBox(width: 8),
+                    Text('Eliminar lista', style: TextStyle(color: Colors.red)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 16),
+              if (combinedProducts.isNotEmpty)
+                Card(
+                  elevation: 4,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Resumen de la lista', style: Theme.of(context).textTheme.headlineSmall),
+                        const SizedBox(height: 8),
+                        Text('Cantidad total de productos: ${totalQuantity.toStringAsFixed(2)}'),
+                        Text('Costo total de la lista: \$${totalPrice.toStringAsFixed(2)}'),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: SizedBox(
-                    height: 55,
-                    child: ElevatedButton.icon(
-                      onPressed: _finalizeList,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(15),
+              const SizedBox(height: 16),
+              if (combinedProducts.isNotEmpty)
+                Column(
+                  children: combinedProducts.map((product) {
+                    final isManual = _manualProducts.contains(product);
+                    final cardColor = isManual ? Colors.grey[200] : null;
+                    final noteText = isManual ? 'Producto agregado a mano' : null;
+                    final productList = isManual ? _manualProducts : _bulkEntryProducts;
+                    final listType = isManual ? 'manual' : 'entrada masiva';
+                    final index = productList.indexOf(product);
+
+                    return Card(
+                      color: cardColor,
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      child: ListTile(
+                        title: Text(product.name),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Cantidad: ${product.quantity} - Precio: \$${product.unitPrice.toStringAsFixed(2)}'),
+                            if (noteText != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 4.0),
+                                child: Text(
+                                  noteText,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontStyle: FontStyle.italic,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () => _editProduct(index, productList),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.delete, color: Colors.red),
+                              onPressed: () => _deleteProduct(index, productList, listType),
+                            ),
+                          ],
                         ),
                       ),
-                      icon: const Icon(Icons.check_circle_outline, size: 28),
-                      label: const Text(
-                        'Finalizar Lista',
-                        style: TextStyle(fontSize: 16),
-                      ),
-                    ),
+                    );
+                  }).toList(),
+                ),
+              if (combinedProducts.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(
+                    child: Text('No hay productos en la lista.', style: TextStyle(color: Colors.grey)),
                   ),
                 ),
-              ],
-            ),
+              // ✅ Se añade un espacio al final de la lista para acomodar los botones flotantes
+              const SizedBox(height: 120),
+            ],
+          ),
+        ),
+      ),
+      // ✅ Se restauran los botones flotantes
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          FloatingActionButton.extended(
+            heroTag: 'addBulkBtn',
+            onPressed: _navigateToBulkEntry,
+            label: const Text('Entrada Masiva (Excel)'),
+            icon: const Icon(Icons.table_chart),
+          ),
+          const SizedBox(height: 10),
+          FloatingActionButton.extended(
+            heroTag: 'addProductBtn',
+            onPressed: () async {
+              final result = await showModalBottomSheet<Product?>(
+                context: context,
+                isScrollControlled: true,
+                builder: (_) => ProductSearchSheet(
+                  productosDisponibles: productosDisponibles,
+                ),
+              );
+              if (result != null) {
+                _addManualProduct(result);
+              }
+            },
+            label: const Text('Añadir Producto Manual'),
+            icon: const Icon(Icons.add),
           ),
         ],
       ),

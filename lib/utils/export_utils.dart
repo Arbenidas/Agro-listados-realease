@@ -1,21 +1,20 @@
 // Archivo: lib/utils/export_utils.dart
+// Modificado para corregir la llamada a compute con generateProductListPdf
 
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/models/units.dart';
+import 'package:flutter_listados/utils/pdf_utils.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:universal_html/html.dart' as html;
-import 'package:archive/archive.dart'; // ✅ Cambiado de archive_io a archive
-// ignore: depend_on_referenced_packages
+import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 import '../models/product.dart';
+import '../data/units.dart';
 
 // --- Funciones de generación en segundo plano ---
 
@@ -43,7 +42,6 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
   final rows = items.map((p) {
     final mapping = unitMapping[p.unit]!;
     final totalProducto = (p.quantity * p.unitPrice).toStringAsFixed(2);
-    // ✅ Escapar campos para CSV si es necesario (para prevenir problemas con comas en nombres, etc.)
     return [
       _escapeCsvField(""),
       _escapeCsvField(puntoId),
@@ -53,7 +51,7 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
       _escapeCsvField(totalProducto),
       _escapeCsvField(p.unitPrice.toStringAsFixed(2)),
       _escapeCsvField(p.quantity.toString()),
-      _escapeCsvField(mapping["id"].toString()), // Asegurarse de que el ID de medida sea String
+      _escapeCsvField(mapping["id"].toString()),
       _escapeCsvField(mapping["name"]!),
       _escapeCsvField(""),
       _escapeCsvField(""),
@@ -61,15 +59,14 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
   }).toList();
 
   final csv = StringBuffer();
-  csv.writeln(headers.map(_escapeCsvField).join(",")); // ✅ Escapar también los encabezados
+  csv.writeln(headers.map(_escapeCsvField).join(","));
   for (final row in rows) {
     csv.writeln(row.join(","));
   }
 
-  return Uint8List.fromList(utf8.encode(csv.toString())); // ✅ Usar utf8.encode para consistencia
+  return Uint8List.fromList(utf8.encode(csv.toString()));
 }
 
-// Función auxiliar para escapar campos CSV
 String _escapeCsvField(String field) {
   if (field.contains(',') || field.contains('"') || field.contains('\n')) {
     return '"${field.replaceAll('"', '""')}"';
@@ -77,94 +74,13 @@ String _escapeCsvField(String field) {
   return field;
 }
 
-
-Future<Uint8List> _generatePdfInBackground(Map<String, dynamic> data) async {
+// ✅ Función auxiliar para envolver la llamada a generateProductListPdf para compute
+// Compute solo puede tomar una función de nivel superior o estática con un solo argumento.
+// Este wrapper convierte los múltiples argumentos (lista y nombre) en un solo Map.
+Future<Uint8List> _pdfGeneratorComputeWrapper(Map<String, dynamic> data) async {
   final List<Product> products = data['products'];
-  final String puntoName = data['puntoName'];
-  final pdf = pw.Document();
-
-  final totalQuantity = products.fold<int>(0, (sum, p) => sum + p.quantity);
-  final totalPrice = products.fold<double>(0.0, (sum, p) => sum + p.subtotal);
-
-  pdf.addPage(
-    pw.MultiPage( // ✅ Cambiado a MultiPage para mejor manejo de contenido largo
-      pageFormat: PdfPageFormat.a4.copyWith(marginTop: 20, marginBottom: 20),
-      build: (pw.Context context) {
-        return [
-          pw.Center(
-            child: pw.Text(
-              'Lista de Productos para $puntoName',
-              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
-            ),
-          ),
-          pw.SizedBox(height: 10),
-          pw.Text(
-            'Fecha: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
-            style: const pw.TextStyle(fontSize: 14),
-          ),
-          pw.SizedBox(height: 20),
-          pw.TableHelper.fromTextArray(
-            headers: [
-              '', // Columna para el checkbox
-              'Nombre',
-              'Cantidad',
-              'Unidad',
-              'Precio Unitario',
-              'Subtotal'
-            ],
-            cellAlignment: pw.Alignment.centerLeft,
-            headerAlignment: pw.Alignment.centerLeft,
-            columnWidths: {
-              0: const pw.FlexColumnWidth(0.5), // Ancho para el checkbox
-              1: const pw.FlexColumnWidth(2.5),
-              2: const pw.FlexColumnWidth(1),
-              3: const pw.FlexColumnWidth(1.2),
-              4: const pw.FlexColumnWidth(1.5),
-              5: const pw.FlexColumnWidth(1.5),
-            },
-            data: products
-                .map((p) => [
-                      '', // Espacio en blanco para el checkbox
-                      p.name,
-                      pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.quantity.toString())),
-                      p.unit.name,
-                      pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.unitPrice.toStringAsFixed(2))),
-                      pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.subtotal.toStringAsFixed(2))),
-                    ])
-                .toList(),
-            border: pw.TableBorder.all(color: PdfColors.grey500), // ✅ Añadir borde para visibilidad
-            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey700),
-            cellStyle: const pw.TextStyle(fontSize: 10),
-            rowDecoration: const pw.BoxDecoration(border: pw.Border(bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5))),
-          ),
-          pw.SizedBox(height: 30),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-            children: [
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: [
-                  pw.Text('Total Bultos:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
-                  pw.SizedBox(height: 5),
-                  pw.Text(totalQuantity.toString(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 20)),
-                ],
-              ),
-              pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.end,
-                children: [
-                  pw.Text('Precio Total:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
-                  pw.SizedBox(height: 5),
-                  pw.Text('\$${totalPrice.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 20)),
-                ],
-              ),
-            ],
-          ),
-        ];
-      },
-    ),
-  );
-  return await pdf.save();
+  final String? puntoName = data['puntoName'];
+  return await generateProductListPdf(products, puntoName: puntoName);
 }
 
 // --- Funciones de exportación y compartición ---
@@ -216,7 +132,7 @@ Future<void> _prepareAndShare({
   required String exportType,
 }) async {
   _showLoadingDialog(context);
-  final now = DateTime.now(); // Usar DateTime.now() directamente para la fecha de los archivos
+  final now = DateTime.now();
   final fileDate = DateFormat('dd-MM-yyyy').format(now);
   String title = '';
   Uint8List? fileData;
@@ -236,11 +152,12 @@ Future<void> _prepareAndShare({
         break;
 
       case 'pdf':
-        fileData = await compute(_generatePdfInBackground, {
+        // ✅ CORRECCIÓN AQUÍ: Ahora llamamos a nuestro wrapper estático
+        fileData = await compute(_pdfGeneratorComputeWrapper, {
           'products': products,
           'puntoName': puntoName,
         });
-        fileName = 'Lista_${puntoName.replaceAll(' ', '_')}_$fileDate.pdf'; // ✅ Nombre de archivo más consistente
+        fileName = 'Lista_${puntoName.replaceAll(' ', '_')}_$fileDate.pdf';
         mimeType = 'application/pdf';
         title = 'Lista de Productos (PDF)';
         break;
@@ -250,30 +167,29 @@ Future<void> _prepareAndShare({
           'items': products,
           'puntoId': puntoId,
         });
-        final pdfData = await compute(_generatePdfInBackground, {
+        // ✅ CORRECCIÓN AQUÍ: Ahora llamamos a nuestro wrapper estático
+        final pdfData = await compute(_pdfGeneratorComputeWrapper, {
           'products': products,
           'puntoName': puntoName,
         });
         
         final archive = Archive();
-        // Nombres de archivos dentro del ZIP para CSV y PDF
         archive.addFile(ArchiveFile('DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv', csvData.length, csvData));
         archive.addFile(ArchiveFile('Lista_${puntoName.replaceAll(' ', '_')}_$fileDate.pdf', pdfData.length, pdfData));
         
-        fileData = Uint8List.fromList(ZipEncoder().encode(archive, level: Deflate.DEFAULT_COMPRESSION)!); // ✅ Añadido nivel de compresión
+        fileData = Uint8List.fromList(ZipEncoder().encode(archive, level: Deflate.DEFAULT_COMPRESSION)!);
         fileName = 'Despacho_${puntoName.replaceAll(' ', '_')}_$fileDate.zip';
         mimeType = 'application/zip';
         title = 'Archivos de Despacho (ZIP)';
         break;
     }
 
-    if (context.mounted) Navigator.of(context).pop(); // Cierra el diálogo de carga
+    if (context.mounted) Navigator.of(context).pop();
 
     if (fileData != null) {
       if (kIsWeb) {
         final blob = html.Blob([fileData], mimeType);
         final url = html.Url.createObjectUrlFromBlob(blob);
-        // ignore: unused_local_variable
         final anchor = html.AnchorElement(href: url)
           ..setAttribute("download", fileName)
           ..click();
@@ -354,7 +270,6 @@ Future<void> _prepareAndShare({
   } catch (e) {
     debugPrint('Error general en _prepareAndShare: $e');
     if (context.mounted) {
-      // Ocultar el diálogo de carga si aún está visible
       if (Navigator.of(context).canPop()) {
          Navigator.of(context).pop();
       }
@@ -363,11 +278,10 @@ Future<void> _prepareAndShare({
       );
     }
   } finally {
-    // Asegurarse de que el diálogo de carga se cierre si hubo un error antes de que se manejara.
     if (context.mounted && Navigator.of(context).canPop()) {
        final currentRoute = ModalRoute.of(context);
        if (currentRoute is PopupRoute && currentRoute.barrierDismissible == false) {
-           Navigator.of(context).pop(); // Cierra el CircularProgressIndicator
+           Navigator.of(context).pop();
        }
     }
   }

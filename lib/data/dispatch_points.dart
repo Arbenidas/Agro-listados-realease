@@ -1,4 +1,5 @@
-final Map<String, String> puntos = {
+// lib/data/dispatch_points.dart
+final Map<String, String> puntosDespacho = {
     "Atiquizaya, Atiquizaya": "Punto031",
     "Ahuachapán, Ahuachapán Centro": "Punto042",
     "San Francisco Menéndez, Col La Palma": "Punto001",

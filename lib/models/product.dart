@@ -1,4 +1,5 @@
-// Archivo: models/product.dart
+// Archivo: lib/models/product.dart
+// Actualizado con el método copyWith
 
 enum UnitType {
   Unidad,
@@ -43,6 +44,23 @@ class Product {
   });
 
   double get subtotal => unitPrice * quantity;
+
+  // ✅ Método copyWith añadido
+  Product copyWith({
+    String? id,
+    String? name,
+    double? unitPrice,
+    UnitType? unit,
+    int? quantity,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      unitPrice: unitPrice ?? this.unitPrice,
+      unit: unit ?? this.unit,
+      quantity: quantity ?? this.quantity,
+    );
+  }
 
   // Convierte un objeto Product en un Map para serializarlo
   Map<String, dynamic> toJson() {

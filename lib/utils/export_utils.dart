@@ -1,360 +1,137 @@
 // Archivo: lib/utils/export_utils.dart
+// CORREGIDO para problemas de descompresión ZIP
 
-import 'dart:io';
+import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+// ✅ Importación de archive simplificada y directa para las clases necesarias
+import 'package:archive/archive.dart';
 import 'package:flutter_listados/models/units.dart';
-import 'package:intl/intl.dart';
+import 'package:flutter_listados/utils/generador_pdf.dart'; 
 import 'package:path_provider/path_provider.dart';
-import 'package:pdf/pdf.dart';
-import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
-import 'package:universal_html/html.dart' as html;
-import 'package:archive/archive_io.dart';
-import 'package:path/path.dart' as p;
-import 'package:permission_handler/permission_handler.dart';
+import 'dart:io' show File, Directory;
+import 'dart:html' as html;
 import '../models/product.dart';
 
-Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
-  final List<Product> items = data['items'];
-  final String puntoId = data['puntoId'];
-  final now = DateTime.now().add(const Duration(days: 1));
-  final csvFecha = DateFormat('dd/MM/yyyy').format(now);
 
-  final headers = [
-    "IdCargado",
-    "IdPunto",
-    "FechaVenta",
-    "IdProducto",
-    "Producto",
-    "TotalProducto",
-    "UnidadesPrecio",
-    "Cantidad",
-    "IdMedida",
-    "UnidadMedida",
-    "DatosCargados",
-    "UsuarioApp",
-  ];
-
-  final rows = items.map((p) {
-    final mapping = unitMapping[p.unit]!;
-    final totalProducto = (p.quantity * p.unitPrice).toStringAsFixed(2);
-    return [
-      "",
-      puntoId,
-      csvFecha,
-      p.id,
-      p.name,
-      totalProducto,
-      p.unitPrice.toStringAsFixed(2),
-      p.quantity.toString(),
-      mapping["id"],
-      mapping["name"],
-      "",
-      "",
-    ];
-  }).toList();
-
-  final csv = StringBuffer();
-  csv.writeln(headers.join(","));
-  for (final row in rows) {
-    csv.writeln(row.join(","));
-  }
-
-  return Uint8List.fromList(csv.toString().codeUnits);
-}
-
-Future<Uint8List> _generatePdfInBackground(Map<String, dynamic> data) async {
+// Tarea pesada para crear los bytes del ZIP, ejecutada en segundo plano
+Future<Uint8List> _createZipFileBytes(Map<String, dynamic> data) async {
   final List<Product> products = data['products'];
   final String puntoName = data['puntoName'];
-  final pdf = pw.Document();
+  final String puntoId = data['puntoId'];
+  
+  // Creamos un objeto Archive para construir el ZIP en memoria
+  final archive = Archive();
 
-  // ✅ Calcular totales
-  final totalQuantity = products.fold<int>(0, (sum, p) => sum + p.quantity);
-  final totalPrice = products.fold<double>(0.0, (sum, p) => sum + p.subtotal);
+  // --- 1. Generar el PDF en memoria y añadirlo al archivo ---
+  final pdfBytes = await generateProductListPdf(products, openFile: false);
+  final pdfFileName = 'lista_productos_$puntoName.pdf';
+  // ✅ Usar ArchiveFile.noCompress si no queremos compresión para el PDF (a veces ayuda a evitar corrupción)
+  // O solo ArchiveFile si queremos compresión por defecto
+  archive.addFile(ArchiveFile(pdfFileName, pdfBytes.length, pdfBytes));
 
-  pdf.addPage(
-    pw.Page(
-      pageFormat: PdfPageFormat.a4,
-      build: (pw.Context context) {
-        return pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'Lista de Productos para $puntoName',
-              style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 10),
-            pw.Text(
-              'Fecha: ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
-              style: const pw.TextStyle(fontSize: 14),
-            ),
-            pw.SizedBox(height: 20),
-            pw.TableHelper.fromTextArray(
-              headers: [
-                '', // ✅ Columna para el checkbox
-                'Nombre',
-                'Cantidad',
-                'Unidad',
-                'Precio Unitario',
-                'Subtotal'
-              ],
-              cellAlignment: pw.Alignment.centerLeft,
-              headerAlignment: pw.Alignment.centerLeft,
-              columnWidths: {
-                0: const pw.FlexColumnWidth(0.5), // Ancho para el checkbox
-                1: const pw.FlexColumnWidth(2.5),
-                2: const pw.FlexColumnWidth(1),
-                3: const pw.FlexColumnWidth(1.2),
-                4: const pw.FlexColumnWidth(1.5),
-                5: const pw.FlexColumnWidth(1.5),
-              },
-              data: products
-                  .map((p) => [
-                        '', // ✅ Espacio en blanco para el checkbox
-                        p.name,
-                        pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.quantity.toString())),
-                        p.unit.name,
-                        pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.unitPrice.toStringAsFixed(2))),
-                        pw.Align(alignment: pw.Alignment.centerRight, child: pw.Text(p.subtotal.toStringAsFixed(2))),
-                      ])
-                  .toList(),
-            ),
-            pw.SizedBox(height: 30),
-            // ✅ Nuevo apartado de totales
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: [
-                    pw.Text('Total Bultos:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
-                    pw.SizedBox(height: 5),
-                    pw.Text(totalQuantity.toString(), style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 20)),
-                  ],
-                ),
-                pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.end,
-                  children: [
-                    pw.Text('Precio Total:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 16)),
-                    pw.SizedBox(height: 5),
-                    pw.Text('\$${totalPrice.toStringAsFixed(2)}', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 20)),
-                  ],
-                ),
-              ],
-            ),
-          ],
-        );
-      },
-    ),
-  );
-  return await pdf.save();
+
+  // --- 2. Crear el contenido JSON y añadirlo al archivo ---
+  final List<Map<String, dynamic>> productsJson = products.map((p) => {
+    'id': p.id,
+    'name': p.name,
+    'quantity': p.quantity,
+    'unit': unitMapping[p.unit]?['name'] ?? p.unit.name,
+    'unitPrice': p.unitPrice,
+    'subtotal': p.subtotal,
+  }).toList();
+  final jsonString = jsonEncode(productsJson);
+  final jsonFileName = 'lista_productos_$puntoName.json';
+  archive.addFile(ArchiveFile(jsonFileName, jsonString.length, Uint8List.fromList(utf8.encode(jsonString))));
+
+
+  // --- 3. Crear el contenido TXT y añadirlo al archivo ---
+  final StringBuffer txtContent = StringBuffer();
+  txtContent.writeln('Lista de Productos para: $puntoName (ID: $puntoId)');
+  txtContent.writeln('Fecha de exportación: ${DateTime.now().toIso8601String().split('T')[0]}');
+  txtContent.writeln('--------------------------------------------------');
+  double totalGeneral = 0.0;
+  for (var p in products) {
+    txtContent.writeln('${p.name} - ${p.quantity} ${unitMapping[p.unit]?['name'] ?? p.unit.name} x \$${p.unitPrice.toStringAsFixed(2)} = \$${p.subtotal.toStringAsFixed(2)}');
+    totalGeneral += p.subtotal;
+  }
+  txtContent.writeln('--------------------------------------------------');
+  txtContent.writeln('TOTAL GENERAL: \$${totalGeneral.toStringAsFixed(2)}');
+  final txtFileName = 'lista_productos_$puntoName.txt';
+  archive.addFile(ArchiveFile(txtFileName, txtContent.length, Uint8List.fromList(utf8.encode(txtContent.toString()))));
+
+
+  // Codificar el objeto Archive a bytes ZIP
+  final zipEncoder = ZipEncoder();
+  // El nivel de compresión por defecto de ZipEncoder es Deflate.DEFAULT_COMPRESSION (6),
+  // que suele ser el más compatible.
+  // Si BEST_COMPRESSION (9) sigue dando problemas, podríamos probar con DEFAULT o NO_COMPRESSION.
+  final zipBytesList = zipEncoder.encode(archive, level: Deflate.DEFAULT_COMPRESSION); // ✅ Cambiado a DEFAULT_COMPRESSION
+
+  if (zipBytesList == null) {
+    throw Exception('Failed to encode zip archive.');
+  }
+
+  return Uint8List.fromList(zipBytesList);
 }
 
-Future<void> shareCsv(List<Product> items,
-    {required String puntoId,
-    required String puntoName,
-    required BuildContext context}) async {
-  await _prepareAndShare(
-    context: context,
-    products: items,
-    puntoId: puntoId,
-    puntoName: puntoName,
-    exportType: 'csv',
-  );
-}
-
-Future<void> sharePdf(List<Product> products,
-    {required String puntoId,
-    required String puntoName,
-    required BuildContext context}) async {
-  await _prepareAndShare(
-    context: context,
-    products: products,
-    puntoId: puntoId,
-    puntoName: puntoName,
-    exportType: 'pdf',
-  );
-}
-
-Future<void> shareZip(List<Product> products,
-    {required String puntoId,
-    required String puntoName,
-    required BuildContext context}) async {
-  await _prepareAndShare(
-    context: context,
-    products: products,
-    puntoId: puntoId,
-    puntoName: puntoName,
-    exportType: 'zip',
-  );
-}
-
-Future<void> _prepareAndShare({
-  required BuildContext context,
-  required List<Product> products,
+Future<void> shareZip(
+  List<Product> products, {
   required String puntoId,
   required String puntoName,
-  required String exportType,
+  required BuildContext context,
 }) async {
-  _showLoadingDialog(context);
-  final now = DateTime.now().add(const Duration(days: 1));
-  final fileDate = DateFormat('dd-MM-yyyy').format(now);
-  String title = '';
-  Uint8List? fileData;
-  String fileName = '';
-  String mimeType = '';
+  if (products.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("No hay productos para exportar.")),
+    );
+    return;
+  }
+
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(content: Text('Preparando archivo ZIP...')),
+  );
 
   try {
-    switch (exportType) {
-      case 'csv':
-        fileData = await compute(_generateCsvInBackground, {
-          'items': products,
-          'puntoId': puntoId,
-        });
-        fileName = 'DESPACHO_${puntoName.replaceAll(' ', '_')}_$fileDate.csv';
-        mimeType = 'text/csv';
-        title = 'Lista de Productos (CSV)';
-        break;
+    // Usamos compute() para crear los bytes del ZIP en un hilo de segundo plano
+    final zipBytes = await compute(_createZipFileBytes, {
+      'products': products,
+      'puntoId': puntoId,
+      'puntoName': puntoName,
+    });
 
-      case 'pdf':
-        fileData = await compute(_generatePdfInBackground, {
-          'products': products,
-          'puntoName': puntoName,
-        });
-        fileName = 'Lista_${puntoName}_$fileDate.pdf';
-        mimeType = 'application/pdf';
-        title = 'Lista de Productos (PDF)';
-        break;
-
-      case 'zip':
-        final csvData = await compute(_generateCsvInBackground, {
-          'items': products,
-          'puntoId': puntoId,
-        });
-        final pdfData = await compute(_generatePdfInBackground, {
-          'products': products,
-          'puntoName': puntoName,
-        });
-        
-        final archive = Archive();
-        archive.addFile(ArchiveFile('${puntoName}_$fileDate.csv', csvData.length, csvData));
-        archive.addFile(ArchiveFile('${puntoName}_$fileDate.pdf', pdfData.length, pdfData));
-        fileData = Uint8List.fromList(ZipEncoder().encode(archive)!);
-        fileName = 'Despacho_${puntoName.replaceAll(' ', '_')}_$fileDate.zip';
-        mimeType = 'application/zip';
-        title = 'Archivos de Despacho (ZIP)';
-        break;
-    }
-
-    if (context.mounted) Navigator.of(context).pop();
-
-    if (fileData != null) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       if (kIsWeb) {
-        // En la web, se fuerza la descarga para todos los tipos de archivo.
-        final blob = html.Blob([fileData], mimeType);
+        // Lógica específica para la web: descarga el ZIP
+        final blob = html.Blob([zipBytes], 'application/zip');
         final url = html.Url.createObjectUrlFromBlob(blob);
         final anchor = html.AnchorElement(href: url)
-          ..setAttribute("download", fileName)
+          ..setAttribute("download", "lista_productos_$puntoName.zip")
           ..click();
         html.Url.revokeObjectUrl(url);
-
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Archivo ZIP descargado exitosamente.')),
+        );
       } else {
-        // Lógica de compartir en móvil con fallback para guardar el archivo
+        // Lógica para móvil/escritorio: guardar en archivo temporal y compartir
         final tempDir = await getTemporaryDirectory();
-        final tempFile = File(p.join(tempDir.path, fileName));
-        await tempFile.writeAsBytes(fileData);
-        final filesToShare = [XFile(tempFile.path, name: fileName)];
-        
-        bool sharedSuccessfully = false;
-        try {
-          await Share.shareXFiles(filesToShare,
-            subject: title,
-            sharePositionOrigin: const Rect.fromLTWH(0, 0, 1, 1));
-          sharedSuccessfully = true;
-        } catch (e) {
-          debugPrint("Error o cancelación al compartir: $e");
-        }
+        final zipFilePath = '${tempDir.path}/lista_productos_$puntoName.zip';
+        final file = File(zipFilePath);
+        await file.writeAsBytes(zipBytes); // Escribimos los bytes al archivo temporal
 
-        if (context.mounted) {
-          if (sharedSuccessfully) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('$title compartido exitosamente')),
-            );
-          } else {
-            // Lógica de fallback: preguntar al usuario si desea guardar
-            final result = await showDialog<bool>(
-              context: context,
-              barrierDismissible: false,
-              builder: (ctx) => AlertDialog(
-                title: const Text('Compartir Cancelado'),
-                content: const Text('¿Deseas guardar el archivo en tu dispositivo?'),
-                actions: [
-                  TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(false),
-                    child: const Text('Cancelar'),
-                  ),
-                  ElevatedButton(
-                    onPressed: () => Navigator.of(ctx).pop(true),
-                    child: const Text('Guardar'),
-                  ),
-                ],
-              ),
-            );
-
-            if (result == true) {
-              final status = await Permission.storage.request();
-              if (status.isGranted) {
-                // Guarda el archivo en un directorio público accesible
-                final directory = await getExternalStorageDirectory();
-                if (directory != null) {
-                  final newPath = p.join(directory.path, fileName);
-                  await tempFile.copy(newPath);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Archivo guardado en ${directory.path}')),
-                    );
-                  }
-                }
-              } else {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Permiso denegado para guardar archivo')),
-                  );
-                }
-              }
-            } else {
-              // El usuario no quiso guardar, no hacemos nada
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Operación cancelada')),
-                );
-              }
-            }
-          }
-        }
+        await Share.shareXFiles([XFile(zipFilePath)], text: 'Lista de productos para $puntoName');
       }
     }
   } catch (e) {
+    debugPrint('Error al procesar el archivo ZIP: $e');
     if (context.mounted) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error al compartir: $e')),
+        const SnackBar(content: Text('Error al procesar el archivo.')),
       );
     }
-  } finally {
-    if (context.mounted && Navigator.of(context).canPop()) {
-      Navigator.of(context).pop();
-    }
   }
-}
-
-void _showLoadingDialog(BuildContext context) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (BuildContext context) {
-      return const Center(child: CircularProgressIndicator());
-    },
-  );
 }

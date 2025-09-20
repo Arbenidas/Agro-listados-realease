@@ -42,10 +42,13 @@ dependencies:
   pdf: ^3.10.8
   universal_html: ^2.2.4
   js: ^0.6.7
-  archive: ^3.1.2  # O la última versión
-  share_plus: ^8.0.0  # O la última versión
   permission_handler: ^11.3.0
   shared_preferences: ^2.2.3
+   # Dependencias para generación de PDF y gestión de archivos
+  open_filex: ^4.3.2 # Para abrir el PDF en móvil. Asegúrate de tener la última versión.  
+  uuid: ^4.2.1 # Para generar IDs únicos, si no la tienes
+  share_plus: ^7.0.2 # Asegúrate de tenerlo, es necesario para compartir en móvil/desktop
+  archive: ^3.4.9    # Asegúrate de tenerlo
 
 
 dev_dependencies:

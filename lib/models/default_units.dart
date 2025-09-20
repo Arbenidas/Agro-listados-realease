@@ -1,6 +1,7 @@
 // Archivo: lib/data/default_units.dart
 
-import '../models/product.dart';
+
+import 'package:flutter_listados/models/product.dart';
 
 const Map<String, UnitType> defaultUnits = {
   "Apio": UnitType.Caja,

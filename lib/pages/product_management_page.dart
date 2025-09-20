@@ -1,14 +1,20 @@
-// Archivo: product_management_page.dart
+// Archivo: lib/pages/product_management_page.dart
+// Modificado para integrar la página tipo Excel Y mantener el botón "Agregar Producto"
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/models/lista_productos.dart';
-import 'package:flutter_listados/widgets/ProductSearchSheet.dart';
+import 'package:flutter_listados/data/lista_productos.dart';
+import 'package:flutter_listados/models/product.dart';
+// Asegúrate de que este import sea correcto, parece que 'Product' está en models/product.dart
+// y no en 'package:flutter_listados/models/lista_productos.dart'
+import 'package:flutter_listados/models/product.dart';
+import 'package:flutter_listados/widgets/ProductSearchSheet.dart'; // Asegúrate de tener este widget
 import 'package:universal_html/html.dart' as html;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import '../models/product.dart';
+import 'package:flutter_listados/pages/bulk_product_entry_page.dart'; // ✅ Importa la nueva página
 import '../utils/export_utils.dart';
+// Si 'productosDisponibles' no está directamente en el scope, asegúrate de importarlo
 
 class ProductManagementPage extends StatefulWidget {
   final String puntoId;
@@ -139,17 +145,38 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     _saveProducts();
   }
 
+  // ✅ _showAddProductSheet reintegrada
   void _showAddProductSheet() async {
     final result = await showModalBottomSheet<Product>(
       context: context,
       isScrollControlled: true,
       builder: (_) => ProductSearchSheet(
-        productosDisponibles: productosDisponibles, // ✅ Pasa la nueva lista
+        productosDisponibles: productosDisponibles, // ✅ Pasa la lista de productos
       ),
     );
     if (result != null) _addProduct(result);
   }
 
+  // ✅ Función para abrir la página tipo Excel
+  void _showBulkProductEntryPage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BulkProductEntryPage(
+          currentProducts: List<Product>.from(_products), // Pasa una copia para evitar modificaciones directas
+        ),
+      ),
+    );
+
+    if (result != null && result is List<Product>) {
+      setState(() {
+        _products.clear();
+        _products.addAll(result);
+        _hasUnsavedChanges = true;
+      });
+      _saveProducts();
+    }
+  }
 
   void _finalizeList() {
     if (_products.isEmpty) {
@@ -219,7 +246,6 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                 });
                 _clearSavedProducts();
                 Navigator.of(context).pop(); // Cierra el diálogo
-                // ✅ Agregamos un segundo pop para regresar a la página anterior
                 Navigator.of(context).pop();
               },
               child: const Text('Salir y borrar la lista'),
@@ -253,6 +279,13 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
             ],
           ),
         ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.grid_on), // ✅ Botón para la entrada tipo Excel
+            onPressed: _showBulkProductEntryPage,
+            tooltip: 'Entrada tipo Excel',
+          ),
+        ],
       ),
       body: Column(
         children: [
@@ -313,6 +346,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                                   icon:
                                       const Icon(Icons.edit, color: Colors.green),
                                   onPressed: () async {
+                                    // Usamos _showAddProductSheet para editar también
                                     final edited =
                                         await showModalBottomSheet<Product>(
                                       context: context,
@@ -407,7 +441,7 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                   child: SizedBox(
                     height: 55,
                     child: ElevatedButton.icon(
-                      onPressed: _showAddProductSheet,
+                      onPressed: _showAddProductSheet, // ✅ Botón "Agregar Producto" reintegrado
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blueAccent,
                         foregroundColor: Colors.white,

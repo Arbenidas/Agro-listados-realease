@@ -1,6 +1,7 @@
 // Archivo: lib/data/units.dart
 
-import '../models/product.dart';
+import 'package:flutter_listados/models/product.dart';
+
 
 const Map<UnitType, Map<String, String>> unitMapping = {
   UnitType.Unidad: {"id": "c8836a89", "name": "Unidad"},

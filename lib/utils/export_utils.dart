@@ -2,10 +2,9 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
+import 'package:agro_listados/models/units.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/models/units.dart'; // Asegúrate de que esta ruta es correcta
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -13,6 +12,7 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:share_plus/share_plus.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:archive/archive.dart'; // ✅ Cambiado de archive_io a archive
+// ignore: depend_on_referenced_packages
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
 import '../models/product.dart';
@@ -273,6 +273,7 @@ Future<void> _prepareAndShare({
       if (kIsWeb) {
         final blob = html.Blob([fileData], mimeType);
         final url = html.Url.createObjectUrlFromBlob(blob);
+        // ignore: unused_local_variable
         final anchor = html.AnchorElement(href: url)
           ..setAttribute("download", fileName)
           ..click();

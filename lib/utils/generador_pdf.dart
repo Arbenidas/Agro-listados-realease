@@ -2,12 +2,13 @@
 // Modificado para soportar la descarga en la web
 
 import 'dart:io' show File; // Importa solo 'File' de dart:io
-import 'dart:typed_data'; // Necesario para Uint8List
+// Necesario para Uint8List
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:flutter/foundation.dart'; // Para kIsWeb
+// ignore: deprecated_member_use
 import 'dart:html' as html; // Para interactuar con el navegador web
 import '../models/product.dart';
 
@@ -26,7 +27,7 @@ Future<List<int>> generateProductListPdf(List<Product> products, {bool openFile 
             ),
           ),
           pw.SizedBox(height: 20),
-          pw.Table.fromTextArray(
+          pw.TableHelper.fromTextArray(
             headers: ['Producto', 'Cantidad', 'Precio Unitario'],
             data: products.map((product) {
               return [
@@ -67,6 +68,7 @@ Future<List<int>> generateProductListPdf(List<Product> products, {bool openFile 
       // ✅ Lógica específica para la web: descarga el PDF
       final blob = html.Blob([Uint8List.fromList(pdfBytes)], 'application/pdf');
       final url = html.Url.createObjectUrlFromBlob(blob);
+      // ignore: unused_local_variable
       final anchor = html.AnchorElement(href: url)
         ..setAttribute("download", "lista_productos.pdf")
         ..click();

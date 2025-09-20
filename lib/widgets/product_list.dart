@@ -1,7 +1,7 @@
 // lib/widgets/product_list.dart
 
+import 'package:agro_listados/models/product.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/models/product.dart';
 
 class ProductList extends StatelessWidget {
   final List<Product> items;

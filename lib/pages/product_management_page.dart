@@ -1,18 +1,15 @@
 // Archivo: lib/pages/product_management_page.dart
 // Modificado para integrar la página tipo Excel Y mantener el botón "Agregar Producto"
 
+import 'package:agro_listados/data/lista_productos.dart';
+import 'package:agro_listados/models/product.dart';
+import 'package:agro_listados/pages/bulk_product_entry_page.dart';
+import 'package:agro_listados/widgets/product_modal.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/data/lista_productos.dart';
-import 'package:flutter_listados/models/product.dart';
-// Asegúrate de que este import sea correcto, parece que 'Product' está en models/product.dart
-// y no en 'package:flutter_listados/models/lista_productos.dart'
-import 'package:flutter_listados/models/product.dart';
-import 'package:flutter_listados/widgets/ProductSearchSheet.dart'; // Asegúrate de tener este widget
 import 'package:universal_html/html.dart' as html;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
-import 'package:flutter_listados/pages/bulk_product_entry_page.dart'; // ✅ Importa la nueva página
 import '../utils/export_utils.dart';
 // Si 'productosDisponibles' no está directamente en el scope, asegúrate de importarlo
 

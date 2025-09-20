@@ -1,8 +1,9 @@
 // lib/widgets/product_search_sheet.dart
 
+import 'package:agro_listados/models/default_units.dart';
+import 'package:agro_listados/models/product.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/models/default_units.dart';
-import 'package:flutter_listados/models/product.dart';
+// ignore: depend_on_referenced_packages
 
 class ProductSearchSheet extends StatefulWidget {
   final Map<String, String> productosDisponibles;

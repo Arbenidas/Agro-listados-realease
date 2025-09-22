@@ -1,5 +1,6 @@
 // Archivo: lib/utils/export_utils.dart
 // Modificado para añadir el resumen total de bultos y precio al final del PDF.
+// Incluye mejoras para depuración de PDF en blanco.
 
 import 'dart:convert';
 import 'dart:io';
@@ -42,8 +43,10 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
   ];
 
   final rows = items.map((p) {
-    final mapping = unitMapping[p.unit]!;
-    final totalProducto = (p.quantity * p.unitPrice).toStringAsFixed(2);
+    // Asegurarse de que p.unitPrice no sea null para los cálculos, aunque Product ya lo maneja como double
+    final effectiveUnitPrice = p.unitPrice; // Ahora es double, no necesita ?? 0
+    final mapping = unitMapping[p.unit]!; // unitMapping debe manejar UnitType a Map<String, dynamic>
+    final totalProducto = (p.quantity * effectiveUnitPrice).toStringAsFixed(2);
     return [
       _escapeCsvField(""),
       _escapeCsvField(puntoId),
@@ -51,7 +54,7 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
       _escapeCsvField(p.id),
       _escapeCsvField(p.name),
       _escapeCsvField(totalProducto),
-      _escapeCsvField(p.unitPrice.toStringAsFixed(2)),
+      _escapeCsvField(effectiveUnitPrice.toStringAsFixed(2)),
       _escapeCsvField(p.quantity.toString()),
       _escapeCsvField(mapping["id"].toString()),
       _escapeCsvField(mapping["name"]!),
@@ -77,85 +80,103 @@ String _escapeCsvField(String field) {
 }
 
 // ✅ Función consolidada para generar el PDF con el resumen al final
+// Mejoras: Depuración y manejo de listas vacías más robusto.
 Future<Uint8List> _generateProductListPdf(List<Product> products, {String? puntoName}) async {
   final pdf = pw.Document();
+
+  if (products.isEmpty) {
+    pdf.addPage(
+      pw.Page(
+        pageFormat: PdfPageFormat.a4,
+        build: (pw.Context context) {
+          return pw.Center(
+            child: pw.Text(
+              'No hay productos para mostrar en la lista.',
+              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+            ),
+          );
+        },
+      ),
+    );
+    return pdf.save();
+  }
 
   final totalBultos = products.fold(0.0, (sum, p) => sum + p.quantity);
   final totalPrecio = products.fold(0.0, (sum, p) => sum + (p.quantity * p.unitPrice));
 
+  // Datos para la tabla
+  final List<List<dynamic>> tableData = products.map((product) {
+    final isPriceMissingOrZero = product.unitPrice == 0.0;
+    
+    return [
+      pw.Text(
+        product.name,
+        style: pw.TextStyle(color: PdfColors.black, fontWeight: pw.FontWeight.bold, fontSize: 8),
+      ),
+      pw.Text('${product.quantity.toInt()}', style: const pw.TextStyle(fontSize: 8)),
+      isPriceMissingOrZero ? 
+        pw.Text('N/A', style: pw.TextStyle(color: PdfColors.red, fontSize: 8, fontStyle: pw.FontStyle.italic)) : 
+        pw.Text('\$${product.unitPrice.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 8)),
+    ];
+  }).toList();
+
+  // ✅ Uso de pw.MultiPage en lugar de pw.Page
   pdf.addPage(
-    pw.Page(
+    pw.MultiPage(
       pageFormat: PdfPageFormat.a4,
       build: (pw.Context context) {
-        return pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'Lista de Productos',
-              style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
-            ),
-            if (puntoName != null) ...[
-              pw.SizedBox(height: 5),
-              pw.Text('Punto de Despacho: $puntoName', style: const pw.TextStyle(fontSize: 9)),
-            ],
-            pw.SizedBox(height: 10),
-            pw.Text(
-              'Detalles de Productos:',
-              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 5),
-            pw.Table.fromTextArray(
-              cellPadding: const pw.EdgeInsets.all(3),
-              headers: ['Producto', 'Cantidad', 'Precio Unitario'],
-              data: products.map((product) {
-                final isPriceMissing = product.unitPrice == 0 || product.unitPrice == null;
-                final productNameText = isPriceMissing
-                    ? pw.RichText(
-                        text: pw.TextSpan(
-                          children: [
-                            pw.TextSpan(
-                              text: product.name,
-                              style: pw.TextStyle(color: PdfColors.black, fontWeight: pw.FontWeight.bold, fontSize: 8),
-                            ),
-                            pw.TextSpan(
-                              text: '\n(No lleva precio)',
-                              style: pw.TextStyle(color: PdfColors.red, fontSize: 6, fontStyle: pw.FontStyle.italic),
-                            ),
-                          ],
-                        ),
-                      )
-                    : pw.Text(product.name, style: const pw.TextStyle(fontSize: 8));
-
-                return [
-                  productNameText,
-                  '${product.quantity}',
-                  isPriceMissing ? 'N/A' : '\$${product.unitPrice.toStringAsFixed(2)}',
-                ];
-              }).toList(),
-              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
-              cellAlignment: pw.Alignment.centerLeft,
-              cellStyle: const pw.TextStyle(fontSize: 8),
-            ),
-            // ✅ Se añade un expansor para que la tabla y el resumen se separen
-            pw.Spacer(), 
-            pw.Divider(),
-            pw.Text(
-              'Resumen de la lista',
-              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
-            ),
-            pw.SizedBox(height: 5),
-            pw.Row(
-              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
-              children: [
-                pw.Text('Total de Bultos:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                pw.Text(totalBultos.toStringAsFixed(2), style: const pw.TextStyle(fontSize: 10)),
+        return [
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Lista de Productos',
+                style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+              ),
+              if (puntoName != null) ...[
+                pw.SizedBox(height: 5),
+                pw.Text('Punto de Despacho: $puntoName', style: const pw.TextStyle(fontSize: 9)),
               ],
-            ),
+              pw.SizedBox(height: 10),
+              pw.Text(
+                'Detalles de Productos:',
+                style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+              ),
+              pw.SizedBox(height: 5),
+            ]
+          ),
+          // ✅ La tabla ahora es un hijo directo de la lista que retorna MultiPage
+          pw.Table.fromTextArray(
+            cellPadding: const pw.EdgeInsets.all(3),
+            headers: ['Producto', 'Cantidad', 'Precio Unitario'],
+            data: tableData,
+            headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 8),
+            cellAlignment: pw.Alignment.centerLeft,
+            cellStyle: const pw.TextStyle(fontSize: 8),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(3),
+              1: const pw.FlexColumnWidth(1),
+              2: const pw.FlexColumnWidth(1.5),
+            },
+          ),
+        ];
+      },
+      footer: (pw.Context context) {
+        // ✅ Footer que se repite en cada página
+        return pw.Column(
+          children: [
+            pw.Divider(),
             pw.Row(
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
-                pw.Text('Total del Precio:', style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10)),
-                pw.Text('\$${totalPrecio.toStringAsFixed(2)}', style: const pw.TextStyle(fontSize: 10)),
+                pw.Text(
+                  'Página ${context.pageNumber} de ${context.pagesCount}',
+                  style: const pw.TextStyle(fontSize: 10),
+                ),
+                pw.Text(
+                  'Resumen: Bultos: ${totalBultos.toStringAsFixed(2)} | Total: \$${totalPrecio.toStringAsFixed(2)}',
+                  style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10),
+                ),
               ],
             ),
           ],
@@ -168,7 +189,7 @@ Future<Uint8List> _generateProductListPdf(List<Product> products, {String? punto
 
 // Wrapper para `compute`
 Future<Uint8List> _pdfGeneratorComputeWrapper(Map<String, dynamic> data) async {
-  final List<Product> products = data['products'];
+  final List<Product> products = data['products'].cast<Product>(); // ✅ Asegurarse del cast
   final String? puntoName = data['puntoName'];
   return await _generateProductListPdf(products, puntoName: puntoName);
 }
@@ -242,8 +263,9 @@ Future<void> _prepareAndShare({
         break;
 
       case 'pdf':
+        // ✅ Pasar la lista de productos al wrapper de compute
         fileData = await compute(_pdfGeneratorComputeWrapper, {
-          'products': products,
+          'products': products, 
           'puntoName': puntoName,
         });
         fileName = 'Lista_${puntoName.replaceAll(' ', '_')}_$fileDate.pdf';

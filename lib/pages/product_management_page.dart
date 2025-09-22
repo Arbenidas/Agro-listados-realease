@@ -1,10 +1,15 @@
 // Archivo: lib/pages/product_management_page.dart
-// Modificado: Se restauran los botones flotantes y se añade espacio para evitar obstrucciones.
+// Corregido: Manejo de codificación de archivos CSV para evitar FormatException.
 
 import 'dart:convert';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // Importar kIsWeb
 import 'package:flutter/material.dart';
 import 'package:flutter_listados/data/dispatch_points.dart';
 import 'package:flutter_listados/data/products_data.dart';
+import 'package:flutter_listados/data/units.dart';
 import 'package:flutter_listados/models/product.dart';
 import 'package:flutter_listados/utils/export_utils.dart';
 import 'package:flutter_listados/widgets/product_modal.dart';
@@ -29,9 +34,13 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   List<Product> _bulkEntryProducts = [];
   String? _selectedPunto;
 
+  // ✅ Inicializamos el mapa inverso una sola vez
+  late final Map<String, UnitType> _inverseUnitMap;
+
   @override
   void initState() {
     super.initState();
+    _initializeInverseUnitMap(); // ✅ Llamada al nuevo método
     if (widget.initialPuntoName != null) {
       _selectedPunto = widget.initialPuntoName;
       _saveSelectedPunto(widget.initialPuntoName);
@@ -39,6 +48,14 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
       _loadPuntosDespacho();
     }
     _loadProducts();
+  }
+  
+  // ✅ Método para construir el mapa inverso
+  void _initializeInverseUnitMap() {
+    _inverseUnitMap = {};
+    unitMapping.forEach((key, value) {
+      _inverseUnitMap[value['name']!.toLowerCase()] = key;
+    });
   }
 
   Future<void> _saveSelectedPunto(String? puntoName) async {
@@ -106,6 +123,98 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     _saveProducts();
   }
 
+  // ✅ Función mejorada que usa el mapa inicializado en initState
+  UnitType _getUnitTypeFromString(String unitName) {
+    final cleanedName = unitName.trim().toLowerCase();
+    return _inverseUnitMap[cleanedName] ?? UnitType.Unidad;
+  }
+
+  Future<void> _importCsvAndAddProducts() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+      );
+
+      if (result != null && result.files.single.bytes != null) {
+        String fileContent;
+        Uint8List bytes;
+        
+        // ✅ Ahora lee como bytes tanto en web como en móvil
+        if (kIsWeb) {
+          bytes = result.files.single.bytes!;
+        } else {
+          String filePath = result.files.single.path!;
+          File file = File(filePath);
+          bytes = await file.readAsBytes();
+        }
+
+        // ✅ Lógica robusta de decodificación
+        try {
+          fileContent = utf8.decode(bytes); // Intentar UTF-8 primero
+        } catch (e) {
+          debugPrint('Error de decodificación UTF-8, intentando Latin-1: $e');
+          try {
+            fileContent = latin1.decode(bytes); // Si UTF-8 falla, intentar Latin-1
+          } catch (e2) {
+            debugPrint('Error de decodificación Latin-1 también. No se pudo decodificar el archivo: $e2');
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Error: No se pudo leer el archivo. Intenta con UTF-8 o Latin-1.')),
+              );
+            }
+            return; // Salir de la función si ninguna decodificación funciona
+          }
+        }
+        // Fin de la lógica de decodificación
+
+        final lines = fileContent.split('\n').skip(1);
+        final List<Product> importedProducts = [];
+
+        for (var line in lines) {
+          if (line.trim().isEmpty) continue;
+          final fields = line.split(',');
+          if (fields.length >= 10) { 
+            try {
+              final quantityAsDouble = double.tryParse(fields[7].trim()) ?? 0.0;
+              
+              final product = Product(
+                id: fields[3].trim(),
+                name: fields[4].trim(),
+                quantity: quantityAsDouble.toInt(),
+                unitPrice: double.tryParse(fields[6].trim()) ?? 0.0,
+                unit: _getUnitTypeFromString(fields[9].trim()),
+              );
+              importedProducts.add(product);
+            } catch (e) {
+              debugPrint("Error al procesar línea CSV: $line");
+            }
+          } else {
+             debugPrint("Línea CSV con formato incorrecto, se esperaban al menos 10 campos: $line");
+          }
+        }
+
+        setState(() {
+          _bulkEntryProducts.addAll(importedProducts);
+          _bulkEntryProducts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        });
+        _saveProducts();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Se importaron ${importedProducts.length} productos desde el CSV.')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error al importar archivo: $e')),
+        );
+      }
+    }
+  }
+
   void _editProduct(int index, List<Product> productList) async {
     final initialProduct = productList[index];
     final result = await showModalBottomSheet<Product?>(
@@ -154,11 +263,13 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
   Future<void> _showExportDialog() async {
     final allProductsForExport = [..._manualProducts, ..._bulkEntryProducts];
     if (allProductsForExport.isEmpty || _selectedPunto == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Debe haber productos en la lista y un punto seleccionado para exportar.'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Debe haber productos en la lista y un punto seleccionado para exportar.'),
+          ),
+        );
+      }
       return;
     }
 
@@ -231,8 +342,8 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
     final combinedProducts = [..._manualProducts, ..._bulkEntryProducts];
     combinedProducts.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-    final totalQuantity = combinedProducts.fold(0.0, (sum, product) => sum + product.quantity);
-    final totalPrice = combinedProducts.fold(0.0, (sum, product) => sum + (product.quantity * product.unitPrice));
+    final totalQuantity = combinedProducts.fold<double>(0.0, (sum, product) => sum + product.quantity);
+    final totalPrice = combinedProducts.fold<double>(0.0, (sum, product) => sum + (product.quantity * product.unitPrice));
 
     return Scaffold(
       appBar: AppBar(
@@ -241,13 +352,25 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (String result) {
-              if (result == 'export') {
+              if (result == 'import') {
+                _importCsvAndAddProducts();
+              } else if (result == 'export') {
                 _showExportDialog();
               } else if (result == 'delete') {
                 _showDeleteConfirmationDialog();
               }
             },
             itemBuilder: (BuildContext context) => <PopupMenuEntry<String>>[
+              const PopupMenuItem<String>(
+                value: 'import',
+                child: Row(
+                  children: [
+                    Icon(Icons.upload, color: Colors.green),
+                    SizedBox(width: 8),
+                    Text('Importar CSV'),
+                  ],
+                ),
+              ),
               const PopupMenuItem<String>(
                 value: 'export',
                 child: Row(
@@ -353,13 +476,11 @@ class _ProductManagementPageState extends State<ProductManagementPage> {
                     child: Text('No hay productos en la lista.', style: TextStyle(color: Colors.grey)),
                   ),
                 ),
-              // ✅ Se añade un espacio al final de la lista para acomodar los botones flotantes
               const SizedBox(height: 120),
             ],
           ),
         ),
       ),
-      // ✅ Se restauran los botones flotantes
       floatingActionButton: Column(
         mainAxisAlignment: MainAxisAlignment.end,
         crossAxisAlignment: CrossAxisAlignment.end,

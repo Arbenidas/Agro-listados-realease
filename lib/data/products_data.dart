@@ -116,7 +116,12 @@ const Map<String, String> productosDisponibles = {
   "Mango":"Producto020",
   "Cebollines":"c36ab340",
   "Guisquil indio de primera":"Producto014",
-  "Guisquil indio de segunda":"a4073d8d"
+  "Guisquil indio de segunda":"a4073d8d",
+  "Papaya grande":"Producto026",
+  "Papaya mediana":"f0f26043",
+  "Zapote":"06091c26",
+  "Guayaba":"Producto041",
+  
 };
 
 const Map<String, UnitType> defaultUnits = {
@@ -217,6 +222,7 @@ const Map<String, UnitType> defaultUnits = {
   "Papa Russet": UnitType.Saco,
   "Papa Soloma": UnitType.Saco,
   "Papaya": UnitType.Caja,
+  "Papaya grande":UnitType.Caja,
   "Pera": UnitType.Caja,
   "Perejil": UnitType.Manojo,
   "Repollo Morado": UnitType.Bulto,
@@ -234,4 +240,7 @@ const Map<String, UnitType> defaultUnits = {
   "Cebollines":UnitType.Bulto,
   "Guisquil indio de primera":UnitType.Bolsa,
   "Guisquil indio de segunda":UnitType.Bolsa,
+  "Papaya mediana":UnitType.Caja,
+  "Zapote":UnitType.Caja,
+  "Guayaba":UnitType.Bolsa
 };

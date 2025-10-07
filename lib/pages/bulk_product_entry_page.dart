@@ -3,7 +3,7 @@
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/data/products_data.dart' hide defaultUnits;
+import 'package:flutter_listados/data/products_data.dart';
 import 'package:flutter_listados/data/units.dart';
 import 'package:flutter_listados/models/product.dart';
 import 'package:flutter_listados/utils/pdf_utils.dart';

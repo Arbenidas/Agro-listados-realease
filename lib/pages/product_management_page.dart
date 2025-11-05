@@ -13,6 +13,7 @@ import 'package:flutter_listados/data/dispatch_points.dart';
 import 'package:flutter_listados/data/product_icons.dart';
 import 'package:flutter_listados/data/products_data.dart';
 import 'package:flutter_listados/data/units.dart';
+import 'package:flutter_listados/main.dart';
 import 'package:flutter_listados/models/managed_list.dart';
 import 'package:flutter_listados/models/product.dart';
 import 'package:flutter_listados/utils/export_utils.dart';
@@ -597,12 +598,25 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       _listas.clear();
       _isLoading = true; // Prevenir builds
     });
+    // Limpiamos SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('managedLists');
     await prefs.remove('lastActiveListIndex');
 
+    // Regresamos a la pantalla principal
     if (mounted) {
-      Navigator.of(context).pop(); // Regresa a la pantalla principal
+      // --- CAMBIO AQUÍ ---
+      // Usamos pushAndRemoveUntil para limpiar el historial de navegación
+      // y volver a la pantalla principal.
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(
+          builder: (context) =>
+              const MyHomePage(title: 'Seleccionar Punto de Venta'),
+        ),
+        (Route<dynamic> route) => false, // Esto elimina todas las rutas anteriores
+      );
+      // --- FIN DEL CAMBIO ---
     }
   }
 

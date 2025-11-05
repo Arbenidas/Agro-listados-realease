@@ -1,8 +1,7 @@
 // Archivo: lib/main.dart
-// RE DISEÑO UI: Convertida la lista en una cuadrícula (Grid) visual.
-// OPTIMIZADO:
-// 1. La lista de puntos se ordena 1 SOLA VEZ en initState para mejorar el rendimiento del filtro.
-// 2. Añadido GestureDetector para ocultar el teclado en móviles y corregir el overflow.
+// MODIFICADO: Añadido botón "Continuar editando" si existe una sesión.
+// La app ya NO redirige automáticamente al inicio,
+// sino que da la opción de continuar.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_listados/data/dispatch_points.dart';
@@ -103,30 +102,44 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   final _searchController = TextEditingController();
-  
-  // --- OPTIMIZACIÓN DE RENDIMIENTO ---
-  // Lista 1: Contiene TODOS los puntos, ordenados 1 sola vez.
   List<MapEntry<String, String>> _allPuntos = [];
-  // Lista 2: Contiene los puntos a MOSTRAR (filtrados).
   List<MapEntry<String, String>> _displayPuntos = [];
-  // --- FIN DE OPTIMIZACIÓN ---
-
   String _appVersion = 'Cargando...';
+
+  // --- ESTADOS DE SESIÓN ---
+  bool _isCheckingSession = true;
+  bool _sessionExists = false;
 
   @override
   void initState() {
     super.initState();
     
-    // --- OPTIMIZACIÓN DE RENDIMIENTO ---
-    // Ordenamos la lista 1 sola vez al inicio.
+    // 1. Revisa la sesión
+    _checkSessionStatus();
+
+    // 2. Prepara los datos de la página
     _allPuntos = puntosDespacho.entries.toList()
       ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
-    // Al inicio, la lista a mostrar es igual a la lista completa.
     _displayPuntos = List.from(_allPuntos);
-    // --- FIN DE OPTIMIZACIÓN ---
-    
     _searchController.addListener(_filterPuntos);
     _loadAppVersion();
+  }
+
+  // --- FUNCIÓN MODIFICADA ---
+  // Esta función AHORA solo revisa el estado, no navega.
+  Future<void> _checkSessionStatus() async {
+    final prefs = await SharedPreferences.getInstance();
+    final String? existingLists = prefs.getString('managedLists');
+
+    // Comprueba si hay listas guardadas Y si no es una lista vacía "[]"
+    final bool sessionFound = (existingLists != null && existingLists.length > 2);
+
+    if (mounted) {
+      setState(() {
+        _sessionExists = sessionFound;
+        _isCheckingSession = false; // Termina la carga
+      });
+    }
   }
 
   @override
@@ -139,19 +152,13 @@ class _MyHomePageState extends State<MyHomePage> {
   void _filterPuntos() {
     final query = _searchController.text.toLowerCase();
     setState(() {
-      // --- OPTIMIZACIÓN DE RENDIMIENTO ---
-      // El filtro ahora es mucho más rápido.
       if (query.isEmpty) {
-        // Si no hay búsqueda, muestra todos los puntos (ya ordenados).
         _displayPuntos = List.from(_allPuntos);
       } else {
-        // Si hay búsqueda, filtra la lista ya ordenada.
-        // No necesita volver a ordenar (sort).
         _displayPuntos = _allPuntos
             .where((entry) => entry.key.toLowerCase().contains(query))
             .toList();
       }
-      // --- FIN DE OPTIMIZACIÓN ---
     });
   }
 
@@ -163,7 +170,24 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext c) {
+    // --- PANTALLA DE CARGA (Misma lógica de antes) ---
+    if (_isCheckingSession) {
+      return const Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Buscando sesión...'),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // --- Pantalla Principal ---
     return Scaffold(
       appBar: AppBar(
         title: Column(
@@ -172,8 +196,8 @@ class _MyHomePageState extends State<MyHomePage> {
             Text(widget.title),
           ],
         ),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+        backgroundColor: Theme.of(c).colorScheme.primary,
+        foregroundColor: Theme.of(c).colorScheme.onPrimary,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(80.0),
           child: Padding(
@@ -195,7 +219,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 focusedBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12.0),
                   borderSide: BorderSide(
-                    color: Theme.of(context).colorScheme.onPrimary,
+                    color: Theme.of(c).colorScheme.onPrimary,
                   ),
                 ),
               ),
@@ -204,71 +228,142 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ),
       ),
-      // --- CORRECCIÓN DE OVERFLOW (MÓVIL) ---
-      // Envolvemos el body en un GestureDetector para ocultar el teclado
-      // al tocar fuera del campo de búsqueda.
       body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: CustomScrollView(
-          slivers: [
-            // Espaciador
-            const SliverToBoxAdapter(child: SizedBox(height: 16)),
+        onTap: () => FocusScope.of(c).unfocus(),
+        
+        // --- CAMBIO: Añadimos un Column ---
+        child: Column(
+          children: [
+            // --- NUEVO WIDGET: BOTÓN DE RESUMIR ---
+            if (_sessionExists)
+              _buildResumeCard(context),
 
-            // Cuadrícula de Puntos
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              sliver: SliverGrid(
-                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 300.0, // Ancho máximo de cada tarjeta
-                  mainAxisSpacing: 12.0,
-                  crossAxisSpacing: 12.0,
-                  childAspectRatio: 2.5, // Más anchas que altas
-                ),
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    // Usamos la lista _displayPuntos (optimizada)
-                    final entry = _displayPuntos[index];
-                    return _PuntoCard(
-                      puntoName: entry.key,
-                      onTap: () {
-                        FocusScope.of(context).unfocus();
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => ProductManagementPage(
-                              initialPuntoName: entry.key,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                  childCount: _displayPuntos.length, // Usamos la lista optimizada
-                ),
-              ),
-            ),
+            // --- CAMBIO: Envolvemos la cuadrícula en Expanded ---
+            Expanded(
+              child: CustomScrollView(
+                slivers: [
+                  // Espaciador
+                  // Si NO hay sesión, dejamos un padding superior.
+                  // Si HAY sesión, el Card de Resumen ya da el espacio.
+                  if (!_sessionExists)
+                    const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-            // Versión al final
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Text(
-                  'Versión: $_appVersion',
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+                  // Cuadrícula de Puntos
+                  SliverPadding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    sliver: SliverGrid(
+                      gridDelegate:
+                          const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 300.0,
+                        mainAxisSpacing: 12.0,
+                        crossAxisSpacing: 12.0,
+                        childAspectRatio: 2.5,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final entry = _displayPuntos[index];
+                          return _PuntoCard(
+                            puntoName: entry.key,
+                            onTap: () {
+                              FocusScope.of(context).unfocus();
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => ProductManagementPage(
+                                    initialPuntoName: entry.key,
+                                  ),
+                                ),
+                              ).then((_) {
+                                // --- IMPORTANTE ---
+                                // Cuando volvemos de la página de edición,
+                                // volvemos a chequear la sesión.
+                                // Si el usuario borró todo, el botón desaparecerá.
+                                _checkSessionStatus();
+                              });
+                            },
+                          );
+                        },
+                        childCount: _displayPuntos.length,
+                      ),
+                    ),
+                  ),
+
+                  // Versión al final
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Text(
+                        'Versión: $_appVersion',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
       ),
-      // --- FIN DE CORRECCIÓN DE OVERFLOW ---
+    );
+  }
+
+  // --- NUEVO WIDGET HELPER PARA EL BOTÓN DE RESUMIR ---
+  Widget _buildResumeCard(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      color: Theme.of(context).colorScheme.secondaryContainer,
+      elevation: 4,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProductManagementPage(
+                // Pasamos null para que cargue la sesión guardada
+                initialPuntoName: null,
+              ),
+            ),
+          ).then((_) {
+             // Actualiza el estado por si el usuario borró la sesión
+            _checkSessionStatus();
+          });
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Icon(
+                Icons.edit_note_rounded,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+                size: 28,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Continuar editando listas',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.onSecondaryContainer,
+                      ),
+                ),
+              ),
+              Icon(
+                Icons.arrow_forward_ios,
+                size: 16,
+                color: Theme.of(context).colorScheme.onSecondaryContainer,
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
 
 // --- WIDGET PERSONALIZADO PARA LA TARJETA DEL PUNTO ---
-
+// (Sin cambios)
 class _PuntoCard extends StatelessWidget {
   final String puntoName;
   final VoidCallback onTap;
@@ -286,7 +381,6 @@ class _PuntoCard extends StatelessWidget {
           padding: const EdgeInsets.all(12.0),
           child: Row(
             children: [
-              // Icono
               CircleAvatar(
                 backgroundColor:
                     Theme.of(context).colorScheme.primary.withOpacity(0.1),
@@ -296,7 +390,6 @@ class _PuntoCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              // Texto
               Expanded(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -313,7 +406,6 @@ class _PuntoCard extends StatelessWidget {
                   ],
                 ),
               ),
-              // Icono de flecha
               Icon(Icons.arrow_forward_ios,
                   size: 16, color: Colors.grey[400]),
             ],

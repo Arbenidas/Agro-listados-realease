@@ -1,5 +1,6 @@
 // lib/data/product_mapping.dart
 // ACTUALIZADO: Añadidas todas las excepciones de los CSVs
+// (LICHA, MARACUYA, PERA, MANDARINA, SANDIA, JICAMA, RABANO, etc.)
 
 const Map<String, String> productNormalizationMap = {
   // --- Mapeos de Central de Abastos (basado en tus CSVs) ---
@@ -12,18 +13,26 @@ const Map<String, String> productNormalizationMap = {
   "YUCA (CENTRAL DE ABASTOS)": "Yuca",
   "HUEVO EXTRA GRANDE (CENTRAL DE ABASTOS)": "Huevos Extra Grandes",
 
-  // --- Mapeos de productos con ID 0 o vacío (LICHA, PERA, etc.) ---
+  // --- Mapeos de productos con ID 0 o vacío (Casos simples) ---
   
-  "LICHA": "Lichas", // El CSV dice Licha, la BD dice Lichas
-  "MARACUYA": "Maracuyá", // El CSV no tiene tilde
+  // Plurales, tildes o variaciones
+  "LICHA": "Lichas",
+  "MARACUYA": "Maracuyá",
+  
+  // Nombres directos que fallan por algún motivo
+  "RABANO": "Rabano",
   "PERA": "Pera",
   "MANDARINA": "Mandarina",
-  "SANDIA": "Sandia", // El CSV a veces tiene "SANDIA " (con espacio)
-  "SANDIA ": "Sandia", // ..así que añadimos ambas por seguridad.
   "JICAMA": "Jicama",
-  "RABANO": "Rabano",
-  "NARANJA VALENCIA IMPORTADA": "Naranja", // Asignamos la importada a "Naranja"
 
+  // Casos con espacios al final (aunque .trim() debería quitarlos,
+  // es más seguro tenerlos aquí)
+  "SANDIA": "Sandia",
+  "SANDIA ": "Sandia", 
+
+  // Productos con nombres diferentes
+  "NARANJA VALENCIA IMPORTADA": "Naranja", // Asignamos la importada a "Naranja"
+  
   // --- Añade cualquier otro producto aquí ---
   // "NOMBRE_EN_CSV": "NombreEnProductsData",
 };

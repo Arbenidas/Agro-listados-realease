@@ -1,5 +1,5 @@
-// Archivo: lib/pages/bulk_product_entry_page.dart
-// OPTIMIZADO para Flutter Web: mejor rendimiento en listas grandes.
+// lib/pages/bulk_product_entry_page.dart
+// OPTIMIZADO con lógica de validación y corrección.
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,7 +8,11 @@ import 'package:flutter_listados/data/units.dart';
 import 'package:flutter_listados/models/product.dart';
 import 'package:flutter_listados/utils/pdf_utils.dart';
 
+// --- NUEVOS IMPORTS ---
+import 'package:flutter_listados/data/product_mapping.dart';
 import '../widgets/product_entry_row.dart';
+// Asegúrate de tener dropdown_search en tu pubspec.yaml
+// (ya lo tenías)
 
 class BulkProductEntryPage extends StatefulWidget {
   final List<Product> currentProducts;
@@ -30,26 +34,18 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
 
   late final List<DropdownMenuItem<UnitType>> _unitTypeDropdownItems;
 
+  // --- NUEVO: Set para rastrear productos inválidos ---
+  final Set<String> _invalidProductKeys = {};
+
+  // --- NUEVO: Lista de productos disponibles para el DropdownSearch ---
+  late final List<MapEntry<String, String>> _availableProductEntries;
+
   @override
   void initState() {
     super.initState();
 
-    // 1. Combina productos existentes + catálogo disponible
-    for (var p in widget.currentProducts) {
-      _tempProductsState[p.name + p.id] = p;
-    }
-    for (var entry in productosDisponibles.entries) {
-      final uniqueKey = entry.key + entry.value;
-      _tempProductsState.putIfAbsent(uniqueKey, () {
-        return Product(
-          id: entry.value,
-          name: entry.key,
-          quantity: 0,
-          unitPrice: 0.0,
-          unit: defaultUnits[entry.key] ?? UnitType.Unidad,
-        );
-      });
-    }
+    // 1. Pre-procesa y normaliza los productos entrantes
+    _processAndNormalizeProducts();
 
     // 2. Lista única ordenada
     _allProducts = _tempProductsState.values.toList()
@@ -67,8 +63,67 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
       );
     }).toList();
 
-    // 5. Escucha cambios en el buscador
+    // 5. Prepara la lista para DropdownSearch
+    _availableProductEntries = productosDisponibles.entries.toList()
+      ..sort((a, b) => a.key.toLowerCase().compareTo(b.key.toLowerCase()));
+
+    // 6. Escucha cambios en el buscador
     _searchController.addListener(_filterProducts);
+  }
+
+  /// --- NUEVO: Lógica de normalización y validación ---
+  void _processAndNormalizeProducts() {
+    // Procesa productos existentes (ej. de un CSV)
+    for (var p in widget.currentProducts) {
+      Product productToProcess = p;
+      bool isInvalid = false;
+      String originalKey = p.name + p.id;
+
+      // 1. Verifica si el producto necesita normalización (Id 0 o vacío)
+      if (p.id == "0" || p.id.isEmpty) {
+        String? cleanNameKey = productNormalizationMap[p.name.trim().toUpperCase()];
+
+        // 2. Intenta mapeo automático
+        if (cleanNameKey != null &&
+            productosDisponibles.containsKey(cleanNameKey)) {
+          // ¡Éxito! Producto normalizado automáticamente
+          productToProcess = p.copyWith(
+            id: productosDisponibles[cleanNameKey],
+            name: cleanNameKey,
+            unit: defaultUnits[cleanNameKey] ?? p.unit, // Actualiza unidad
+          );
+        } else {
+          // 3. Falla el mapeo automático, marcar como inválido
+          isInvalid = true;
+        }
+      }
+
+      final uniqueKey =
+          productToProcess.name + productToProcess.id;
+
+      if (isInvalid) {
+        // Si es inválido, usamos la clave original (con Id 0) para rastrearlo
+        _invalidProductKeys.add(originalKey);
+        _tempProductsState[originalKey] = productToProcess;
+      } else {
+         // Si es válido o se corrigió, lo agregamos/actualizamos
+        _tempProductsState[uniqueKey] = productToProcess;
+      }
+    }
+
+    // Agrega el resto del catálogo (productos que no estaban en la lista)
+    for (var entry in productosDisponibles.entries) {
+      final uniqueKey = entry.key + entry.value;
+      _tempProductsState.putIfAbsent(uniqueKey, () {
+        return Product(
+          id: entry.value,
+          name: entry.key,
+          quantity: 0,
+          unitPrice: 0.0,
+          unit: defaultUnits[entry.key] ?? UnitType.Unidad,
+        );
+      });
+    }
   }
 
   void _filterProducts() {
@@ -91,17 +146,94 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
         updatedProduct;
   }
 
+  /// --- NUEVO: Callback para cuando un producto es corregido manualmente ---
+  void _onProductCorrected(
+      Product oldProduct, MapEntry<String, String> newProductEntry) {
+    final oldKey = oldProduct.name + oldProduct.id;
+
+    // Crea el nuevo producto "corregido"
+    final correctedProduct = Product(
+      id: newProductEntry.value, // ID corregido
+      name: newProductEntry.key, // Nombre corregido
+      quantity: oldProduct.quantity, // Mantiene cantidad
+      unitPrice: oldProduct.unitPrice, // Mantiene precio
+      unit: defaultUnits[newProductEntry.key] ?? UnitType.Unidad, // Unidad por defecto
+    );
+
+    final newKey = correctedProduct.name + correctedProduct.id;
+
+    setState(() {
+      // 1. Actualiza el estado temporal
+      _tempProductsState.remove(oldKey);
+      _tempProductsState[newKey] = correctedProduct;
+
+      // 2. Quita la marca de inválido
+      _invalidProductKeys.remove(oldKey);
+
+      // 3. Actualiza la lista de productos (para UI y búsqueda)
+      _allProducts.removeWhere((p) => (p.name + p.id) == oldKey);
+      _allProducts.add(correctedProduct);
+      _allProducts
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+      // 4. Refresca la lista visible
+      _filterProducts();
+    });
+  }
+
+  /// --- MODIFICADO: Bloquea el guardado si hay inválidos ---
   void _saveBulkEntry() {
+    // 1. Revisa si AÚN quedan inválidos
+    // Es posible que el usuario no haya corregido todos.
+    bool hasInvalidProducts = false;
+    for (String key in _tempProductsState.keys) {
+      if (_invalidProductKeys.contains(key)) {
+        hasInvalidProducts = true;
+        break;
+      }
+    }
+
+    if (hasInvalidProducts) {
+      // 2. Si hay, muestra error y no guardes
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Error de Validación'),
+          content: const Text(
+              'Aún existen productos marcados en rojo. Por favor, corrija todos los productos no válidos (seleccionando un reemplazo) antes de guardar.'),
+          actions: [
+            TextButton(
+              child: const Text('Entendido'),
+              onPressed: () => Navigator.of(ctx).pop(),
+            ),
+          ],
+        ),
+      );
+      return; // Detiene el guardado
+    }
+
+    // 3. Si todo está bien, filtra los que no tienen cantidad NI precio
     final productsToReturn = _tempProductsState.values.where((p) {
+      // Asegurarnos de no incluir productos inválidos (doble chequeo)
+      if (_invalidProductKeys.contains(p.name + p.id)) {
+        return false;
+      }
+      // Filtro principal: solo devuelve los que tienen datos
       return p.quantity > 0 || p.unitPrice > 0;
     }).toList();
 
+
+    // 4. Procede a guardar
     Navigator.of(context).pop(productsToReturn);
   }
 
   void _generatePdf() async {
+    // ... (Tu código existente para PDF)
+    // Recomendación: Aplicar la misma validación de _saveBulkEntry
+    // para no imprimir PDFs con productos inválidos.
     final productsToPrint = _tempProductsState.values.where((p) {
-      return p.quantity > 0 || p.unitPrice > 0;
+      return (p.quantity > 0 || p.unitPrice > 0) &&
+          !_invalidProductKeys.contains(p.name + p.id);
     }).toList();
 
     if (productsToPrint.isNotEmpty) {
@@ -116,12 +248,12 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('PDF generado exitosamente.')),
         );
-        // Aquí puedes agregar la opción de compartir/guardar pdfData
       }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('No hay productos con cantidad o precio para exportar.')),
+            content: Text(
+                'No hay productos válidos con cantidad o precio para exportar.')),
       );
     }
   }
@@ -140,6 +272,12 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
       appBar: AppBar(
         title: const Text('Entrada de Productos (Estilo Excel)'),
         actions: [
+          // Tu acción de PDF, si la tenías
+          IconButton(
+            icon: Icon(Icons.picture_as_pdf),
+            onPressed: _generatePdf,
+            tooltip: 'Generar PDF (Solo válidos)',
+          )
         ],
       ),
       body: Column(
@@ -204,12 +342,19 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
                     final product = products[index];
                     final uniqueKey = product.name + product.id;
 
+                    // --- MODIFICADO: Pasa los nuevos parámetros ---
                     return ProductEntryRow(
-                      key: ValueKey(uniqueKey),
+                      key: ValueKey(uniqueKey), // Clave única
                       initialProduct: product,
                       index: index,
                       onChanged: _onProductRowChanged,
                       unitTypeDropdownItems: _unitTypeDropdownItems,
+                      // --- NUEVOS PARÁMETROS ---
+                      isInvalid: _invalidProductKeys.contains(uniqueKey),
+                      availableProducts: _availableProductEntries,
+                      onCorrectProduct: (newProductEntry) {
+                        _onProductCorrected(product, newProductEntry);
+                      },
                     );
                   },
                 );

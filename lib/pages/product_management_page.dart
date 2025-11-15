@@ -1,6 +1,7 @@
 // Archivo: lib/pages/product_management_page.dart
-// RE DISEÑO UI: Mejoras visuales en AppBar, Tarjetas de Resumen,
-// Lista de Productos (ahora con Dismissible) y estado vacío.
+// MODIFICADO:
+// 1. _importCsvAndAddProducts: Mantiene el nombre original de CDA pero asigna el ID correcto.
+// 2. _buildProductListUI: Separa los productos de CDA, los pone al final y los muestra con opacidad.
 
 import 'dart:convert';
 import 'dart:io';
@@ -13,17 +14,19 @@ import 'package:flutter_listados/data/dispatch_points.dart';
 import 'package:flutter_listados/data/product_icons.dart';
 import 'package:flutter_listados/data/products_data.dart';
 import 'package:flutter_listados/data/units.dart';
-import 'package:flutter_listados/main.dart';
+import 'package:flutter_listados/pages/home_page.dart';
 import 'package:flutter_listados/models/managed_list.dart';
 import 'package:flutter_listados/models/product.dart';
 import 'package:flutter_listados/utils/export_utils.dart';
 import 'package:flutter_listados/widgets/product_modal.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_listados/data/product_mapping.dart';
 
 import 'bulk_product_entry_page.dart';
 
 class ProductManagementPage extends StatefulWidget {
+  // ... (código sin cambios) ...
   final String? initialPuntoName;
 
   const ProductManagementPage({
@@ -41,18 +44,46 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   late TabController _tabController;
 
   late final Map<String, UnitType> _inverseUnitMap;
-
   bool _isLoading = true;
+
+  // --- Mapas pre-calculados para búsqueda rápida ---
+  late final Map<String, String> _normalizedMasterProductMap; // Mapa de productos limpios
+  late final Map<String, String> _normalizedMapping; // Mapa de "CENTRAL DE ABASTOS"
 
   @override
   void initState() {
     super.initState();
     _initializeInverseUnitMap();
+    _initializeNormalizationMaps();
     _loadAllLists(initialPuntoName: widget.initialPuntoName);
   }
 
-  // --- LÓGICA DE CARGA Y GUARDADO ---
+  // --- Nueva función para normalizar texto (ignora tildes, mayúsculas) ---
+  String _normalizeString(String s) {
+    return s
+        .toLowerCase()
+        .replaceAll('á', 'a')
+        .replaceAll('é', 'e')
+        .replaceAll('í', 'i')
+        .replaceAll('ó', 'o')
+        .replaceAll('ú', 'u')
+        .replaceAll('ñ', 'n');
+  }
 
+  // --- Pre-calcula los mapas para una búsqueda más rápida ---
+  void _initializeNormalizationMaps() {
+    _normalizedMasterProductMap = {};
+    for (final cleanName in productosDisponibles.keys) {
+      _normalizedMasterProductMap[_normalizeString(cleanName)] = cleanName;
+    }
+    _normalizedMapping = {};
+    for (final entry in productNormalizationMap.entries) {
+      _normalizedMapping[_normalizeString(entry.key)] = entry.value;
+    }
+  }
+
+  // --- LÓGICA DE CARGA Y GUARDADO ---
+  // ... (Sin cambios en _loadAllLists, _saveProducts, _initializeInverseUnitMap, _getUnitTypeFromString) ...
   Future<void> _loadAllLists({String? initialPuntoName}) async {
     final prefs = await SharedPreferences.getInstance();
     final listasJson = prefs.getString('managedLists');
@@ -140,7 +171,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   }
 
   // --- LÓGICA DE GESTIÓN DE LISTAS (PESTAÑAS) ---
-
+  // ... (Sin cambios aquí: _promptAddNewList, _addNewList, _confirmRemoveList, _promptDuplicateList) ...
   void _promptAddNewList() {
     String? selectedPunto;
     showDialog(
@@ -334,7 +365,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     );
   }
 
-  // --- LÓGICA DE GESTIÓN DE PRODUCTOS (adaptada) ---
+  // --- LÓGICA DE GESTIÓN DE PRODUCTOS ---
 
   void _addManualProduct(Product newProduct, ManagedList lista) {
     setState(() {
@@ -350,12 +381,15 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       } else {
         lista.products.add(newProduct);
       }
-      lista.products
-          .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      // El ordenamiento ahora se hace en _buildProductListUI
     });
     _saveProducts();
   }
 
+
+  // ---
+  // --- ¡¡FUNCIÓN MODIFICADA!! ---
+  // ---
   Future<void> _importCsvAndAddProducts(ManagedList lista) async {
     try {
       FilePickerResult? result = await FilePicker.platform.pickFiles(
@@ -402,19 +436,53 @@ class _ProductManagementPageState extends State<ProductManagementPage>
           final fields = line.split(',');
           if (fields.length >= 10) {
             try {
-              final quantityAsDouble =
+              // --- INICIO DE LA LÓGICA DE NORMALIZACIÓN (REQ 1) ---
+              
+              String idProducto = fields[3].trim();
+              String nombre = fields[4].trim(); // <-- Nombre original
+              final double quantityAsDouble =
                   double.tryParse(fields[7].trim()) ?? 0.0;
+              final double unitPrice =
+                  double.tryParse(fields[6].trim()) ?? 0.0;
+              final String unitName = fields[9].trim();
+              UnitType unit = _getUnitTypeFromString(unitName);
+
+              if (idProducto.isEmpty || idProducto == "0") {
+                String normalizedCsvName = _normalizeString(nombre);
+                String? cleanName; // El nombre de products_data.dart
+                
+                cleanName = _normalizedMasterProductMap[normalizedCsvName];
+                
+                if (cleanName == null) {
+                  cleanName = _normalizedMapping[normalizedCsvName];
+                }
+
+                if (cleanName != null &&
+                    productosDisponibles.containsKey(cleanName)) {
+                  
+                  // --- ESTA ES LA CLAVE ---
+                  idProducto = productosDisponibles[cleanName]!; // ID Correcto
+                  unit = defaultUnits[cleanName] ?? unit; // Unidad Correcta
+                  // `nombre` se queda con el valor original del CSV
+                  // (ej. "GUISQUIL NACIONAL (CENTRAL DE ABASTOS)")
+                
+                } else {
+                  if (idProducto.isEmpty) idProducto = "0";
+                }
+              }
+              // --- FIN DE LA LÓGICA DE NORMALIZACIÓN ---
 
               final product = Product(
-                id: fields[3].trim(),
-                name: fields[4].trim(),
+                id: idProducto, // ID Corregido
+                name: nombre, // Nombre Original
                 quantity: quantityAsDouble.toInt(),
-                unitPrice: double.tryParse(fields[6].trim()) ?? 0.0,
-                unit: _getUnitTypeFromString(fields[9].trim()),
+                unitPrice: unitPrice,
+                unit: unit,
               );
               importedProducts.add(product);
+
             } catch (e) {
-              debugPrint("Error al procesar línea CSV: $line");
+              debugPrint("Error al procesar línea CSV: $line. Error: $e");
             }
           } else {
             debugPrint("Línea CSV con formato incorrecto: $line");
@@ -422,9 +490,9 @@ class _ProductManagementPageState extends State<ProductManagementPage>
         }
 
         setState(() {
-          lista.products.addAll(importedProducts);
-          lista.products.sort(
-              (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+          for (var newProduct in importedProducts) {
+             _addManualProduct(newProduct, lista);
+          }
         });
         _saveProducts();
 
@@ -432,7 +500,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
                 content: Text(
-                    'Se importaron ${importedProducts.length} productos a "${lista.puntoName}".')),
+                    'Se importaron y procesaron ${importedProducts.length} productos a "${lista.puntoName}".')),
           );
         }
       }
@@ -445,8 +513,16 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     }
   }
 
-  void _editProduct(int index, ManagedList lista) async {
-    final initialProduct = lista.products[index];
+  void _editProduct(int index, ManagedList lista, bool isCdaProduct) async {
+    // --- CAMBIO: Necesitamos el índice original ---
+    // En lugar de `index`, buscamos el producto en la lista principal
+    final originalIndex = lista.products
+        .indexWhere((p) => p == (isCdaProduct ? lista.cdaProducts[index] : lista.regularProducts[index]));
+
+    if (originalIndex == -1) return; // No se encontró (no debería pasar)
+    
+    final initialProduct = lista.products[originalIndex];
+    // ... el resto de la función _editProduct no cambia
     final result = await showModalBottomSheet<Product?>(
       context: context,
       isScrollControlled: true,
@@ -457,20 +533,20 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     );
     if (result != null) {
       setState(() {
-        lista.products[index] = result;
-        lista.products.sort(
-            (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        lista.products[originalIndex] = result;
       });
       _saveProducts();
     }
   }
 
-  void _deleteProduct(int index, ManagedList lista, String listName) {
+  void _deleteProduct(ManagedList lista, Product productToDelete) {
     // Guardamos el producto por si quiere deshacer
-    final deletedProduct = lista.products[index];
-    
+    final deletedProduct = productToDelete;
+    // Buscamos el índice original para poder re-insertarlo
+    final originalIndex = lista.products.indexOf(deletedProduct);
+
     setState(() {
-      lista.products.removeAt(index);
+      lista.products.remove(deletedProduct);
     });
     _saveProducts();
 
@@ -481,9 +557,12 @@ class _ProductManagementPageState extends State<ProductManagementPage>
           label: 'DESHACER',
           onPressed: () {
             setState(() {
-              lista.products.insert(index, deletedProduct);
-              lista.products.sort(
-                  (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+              // Re-inserta en la posición original si es posible
+              if (originalIndex != -1 && originalIndex < lista.products.length) {
+                lista.products.insert(originalIndex, deletedProduct);
+              } else {
+                lista.products.add(deletedProduct); // Fallback
+              }
             });
             _saveProducts();
           },
@@ -491,6 +570,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       ),
     );
   }
+
 
   void _navigateToBulkEntry(ManagedList lista) async {
     final updatedBulkProducts = await Navigator.of(context).push(
@@ -510,7 +590,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   }
 
   // --- LÓGICA DE EXPORTACIÓN Y BORRADO ---
-
+  // ... (Sin cambios aquí: _showExportDialog, ... _deleteAllAndExit) ...
   Future<void> _showExportDialog() async {
     if (_listas.every((lista) => lista.products.isEmpty)) {
       if (mounted) {
@@ -598,32 +678,23 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       _listas.clear();
       _isLoading = true; // Prevenir builds
     });
-    // Limpiamos SharedPreferences
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('managedLists');
     await prefs.remove('lastActiveListIndex');
 
-    // Regresamos a la pantalla principal
     if (mounted) {
-      // --- CAMBIO AQUÍ ---
-      // Usamos pushAndRemoveUntil para limpiar el historial de navegación
-      // y volver a la pantalla principal.
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(
-          builder: (context) =>
-              const MyHomePage(title: 'Seleccionar Punto de Venta'),
-        ),
-        (Route<dynamic> route) => false, // Esto elimina todas las rutas anteriores
+      Navigator.of(context).pushNamedAndRemoveUntil(
+        '/',
+        (Route<dynamic> route) => false,
       );
-      // --- FIN DEL CAMBIO ---
     }
   }
 
-  // --- BUILD METHOD ---
 
+  // --- BUILD METHOD ---
   @override
   Widget build(BuildContext context) {
+    // ... (Sin cambios en el `build` principal, AppBar, TabBar, FABs) ...
     if (_isLoading) {
       return Scaffold(
         appBar: AppBar(
@@ -800,12 +871,30 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     );
   }
 
-  // --- WIDGET HELPER PARA LA LISTA DE PRODUCTOS (REDISÑADO) ---
-
+  // ---
+  // --- ¡¡WIDGET HELPER MODIFICADO!! (REQ 2 y 3) ---
+  // ---
   Widget _buildProductListUI(ManagedList lista) {
     final products = lista.products;
-    products
+
+    // --- CAMBIO: Separar listas ---
+    final cdaProducts = products
+        .where((p) => p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
+        .toList();
+    final regularProducts = products
+        .where((p) => !p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
+        .toList();
+
+    // --- CAMBIO: Ordenar listas por separado ---
+    regularProducts
         .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    cdaProducts
+        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    
+    // Guardar las listas ordenadas en el objeto `ManagedList`
+    // para que `_editProduct` y `_deleteProduct` puedan encontrar el índice correcto.
+    lista.regularProducts = regularProducts;
+    lista.cdaProducts = cdaProducts;
 
     final totalQuantity =
         products.fold<double>(0.0, (sum, product) => sum + product.quantity);
@@ -814,6 +903,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
 
     // --- Estado Vacío ---
     if (products.isEmpty) {
+      // ... (sin cambios) ...
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -847,7 +937,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       key: ValueKey(lista.id),
       padding: const EdgeInsets.fromLTRB(8, 16, 8, 100), // Padding para FABs
       children: [
-        // --- Tarjeta de Resumen Rediseñada ---
+        // --- Tarjeta de Resumen (sin cambios) ---
         Card(
           elevation: 4,
           color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
@@ -888,17 +978,16 @@ class _ProductManagementPageState extends State<ProductManagementPage>
         ),
         const SizedBox(height: 16),
 
-        // --- Lista de Productos con Dismissible ---
-        ...products.map((product) {
-          final index = products.indexOf(product);
+        // --- CAMBIO: Lista de Productos (Parte 1: Regulares) ---
+        ...regularProducts.map((product) {
+          final index = regularProducts.indexOf(product);
           return Dismissible(
-            key: ValueKey(product.id + product.name + product.quantity.toString()),
+            key: ValueKey(
+                product.id + product.name + product.quantity.toString()),
             direction: DismissDirection.endToStart,
-            // Acción de deslizar (borrar)
             onDismissed: (direction) {
-              _deleteProduct(index, lista, "esta lista");
+              _deleteProduct(lista, product);
             },
-            // Fondo rojo que aparece al deslizar
             background: Container(
               color: Colors.red[700],
               margin: const EdgeInsets.symmetric(vertical: 4),
@@ -915,33 +1004,25 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                 ],
               ),
             ),
-            // La tarjeta del producto
-            // La tarjeta del producto
-            child: Card(
+            child: Card( // --- Sin opacidad ---
               margin: const EdgeInsets.symmetric(vertical: 4),
               child: ListTile(
                 leading: CircleAvatar(
                   backgroundColor:
                       Theme.of(context).colorScheme.primaryContainer,
-                  // --- CAMBIO AQUÍ ---
-                  // Usamos la función getEmojiForProduct
-                  // Los emojis son Texto, no Iconos.
                   child: Text(
                     getEmojiForProduct(product.name),
                     style: const TextStyle(fontSize: 24),
                   ),
-                  // --- FIN DEL CAMBIO ---
                 ),
                 title: Text(product.name,
                     style: TextStyle(fontWeight: FontWeight.bold)),
-// ...
                 subtitle: Text(
                   '${product.quantity} ${unitMapping[product.unit]!['name'] ?? 'Unidad'} x \$${product.unitPrice.toStringAsFixed(2)}',
                 ),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // Subtotal del producto
                     Text(
                       NumberFormat.currency(symbol: '\$')
                           .format(product.subtotal),
@@ -951,13 +1032,81 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                         fontSize: 15,
                       ),
                     ),
-                    // Botón de Editar
                     IconButton(
                       icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                      onPressed: () => _editProduct(index, lista),
+                      onPressed: () => _editProduct(index, lista, false), // false = no es CDA
                       tooltip: 'Editar producto',
                     ),
                   ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+
+        // --- CAMBIO: Título y Lista de Productos (Parte 2: CDA) ---
+        if (cdaProducts.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 24, left: 16, right: 16, bottom: 8),
+            child: Text(
+              "Central de Abastos",
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.grey[600],
+                    fontStyle: FontStyle.italic,
+                  ),
+            ),
+          ),
+          
+        ...cdaProducts.map((product) {
+          final index = cdaProducts.indexOf(product);
+          return Dismissible(
+            key: ValueKey(
+                product.id + product.name + product.quantity.toString()),
+            direction: DismissDirection.endToStart,
+            onDismissed: (direction) {
+              _deleteProduct(lista, product);
+            },
+            background: Container(
+              color: Colors.red[700],
+              // ... (fondo igual al anterior) ...
+            ),
+            child: Opacity( // --- Con opacidad (más gris) ---
+              opacity: 0.75, 
+              child: Card(
+                margin: const EdgeInsets.symmetric(vertical: 4),
+                // color: Colors.grey[50], // Alternativa a la opacidad
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.grey[200], // Avatar gris
+                    child: Text(
+                      getEmojiForProduct(product.name),
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                  ),
+                  title: Text(product.name,
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                    '${product.quantity} ${unitMapping[product.unit]!['name'] ?? 'Unidad'} x \$${product.unitPrice.toStringAsFixed(2)}',
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        NumberFormat.currency(symbol: '\$')
+                            .format(product.subtotal),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: Colors.grey[700], // Total gris
+                          fontSize: 15,
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.edit_outlined, color: Colors.grey[600]), // Icono gris
+                        onPressed: () => _editProduct(index, lista, true), // true = es CDA
+                        tooltip: 'Editar producto',
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -968,6 +1117,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   }
 
   // Helper para la tarjeta de resumen
+  // ... (Sin cambios aquí) ...
   Widget _buildSummaryInfo(
       BuildContext context, String title, String value, IconData icon) {
     return Row(
@@ -993,4 +1143,18 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       ],
     );
   }
+}
+
+// --- CAMBIO: Añadir estas dos listas al modelo ManagedList ---
+// (Esto es necesario para que _editProduct y _deleteProduct funcionen
+// después de ordenar las listas por separado)
+extension ListSeparation on ManagedList {
+  static final Map<String, List<Product>> _regularProductsCache = {};
+  static final Map<String, List<Product>> _cdaProductsCache = {};
+
+  List<Product> get regularProducts => _regularProductsCache[id] ?? [];
+  set regularProducts(List<Product> value) => _regularProductsCache[id] = value;
+
+  List<Product> get cdaProducts => _cdaProductsCache[id] ?? [];
+  set cdaProducts(List<Product> value) => _cdaProductsCache[id] = value;
 }

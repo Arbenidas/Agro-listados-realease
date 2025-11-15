@@ -1,6 +1,7 @@
 // Archivo: lib/utils/export_utils.dart
-// MEJORADO: PDF vuelve a formato Vertical (Portrait)
-// y se reajustan las columnas para que quepa "Observaciones".
+// MODIFICADO:
+// 1. _generateProductListPdf: Separa los productos de CDA.
+// 2. Renderiza una tabla normal y luego una tabla gris separada para CDA.
 
 import 'dart:convert';
 import 'dart:io';
@@ -19,11 +20,9 @@ import '../data/units.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
-// Importación para el nuevo modelo de lista
 import '../models/managed_list.dart';
 
-// --- Funciones de generación en segundo plano ---
-
+// --- (Sin cambios en _generateCsvInBackground ni _escapeCsvField) ---
 Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
   final List<Product> items = data['items'];
   final String puntoId = data['puntoId'];
@@ -45,6 +44,10 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
     "UsuarioApp",
   ];
 
+  // --- REQ 1: ESTO YA FUNCIONA ---
+  // Como `items` (que es la `ManagedList.products`) ya tiene el ID correcto
+  // y el nombre original de CDA, esta función generará el CSV
+  // exactamente como lo pediste.
   final rows = items.map((p) {
     final effectiveUnitPrice = p.unitPrice;
     final mapping = unitMapping[p.unit]!;
@@ -54,7 +57,7 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
       _escapeCsvField(puntoId),
       _escapeCsvField(csvFecha),
       _escapeCsvField(p.id),
-      _escapeCsvField(p.name),
+      _escapeCsvField(p.name), // <-- Usará el nombre de CDA
       _escapeCsvField(totalProducto),
       _escapeCsvField(effectiveUnitPrice.toStringAsFixed(2)),
       _escapeCsvField(p.quantity.toString()),
@@ -81,8 +84,9 @@ String _escapeCsvField(String field) {
   return field;
 }
 
-// --- FUNCIÓN DE GENERACIÓN DE PDF (ACTUALIZADA) ---
-
+// ---
+// --- ¡¡FUNCIÓN DE GENERACIÓN DE PDF MODIFICADA!! (REQ 2 y 3) ---
+// ---
 Future<Uint8List> _generateProductListPdf(List<Product> products,
     {String? puntoName}) async {
   final pdf = pw.Document();
@@ -90,6 +94,7 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
   final helveticaBold = pw.Font.helveticaBold();
 
   if (products.isEmpty) {
+    // ... (sin cambios en el manejo de PDF vacío) ...
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -106,33 +111,53 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
     return pdf.save();
   }
 
-  // Cálculos de totales (usados en el footer y al final)
+  // --- Cálculos de totales (siguen siendo sobre todos los productos) ---
   final totalBultos = products.fold(0.0, (sum, p) => sum + p.quantity);
   final totalPrecio =
       products.fold(0.0, (sum, p) => sum + (p.quantity * p.unitPrice));
-
-  // Formateador de moneda
   final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
-  // --- CAMBIO: TABLA DE DATOS (Unidad fusionada con Producto) ---
-  final List<List<String>> tableData = products.map((product) {
+  // --- CAMBIO: Separar y ordenar listas ---
+  final cdaProducts = products
+      .where((p) => p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
+      .toList();
+  final regularProducts = products
+      .where((p) => !p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
+      .toList();
+
+  regularProducts
+      .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  cdaProducts
+      .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
+  // --- Generar datos de tabla para productos regulares ---
+  final List<List<String>> regularTableData = regularProducts.map((product) {
     final unitName = unitMapping[product.unit]!['name']!;
-    // AQUÍ FUSIONAMOS EL NOMBRE Y LA UNIDAD
     final productNameWithUnit = '${product.name} (${unitName})';
-    
     return [
-      productNameWithUnit, // Columna 0
-      product.quantity.toString(), // Columna 1
-      // La columna de Unidad se elimina
-      currencyFormat.format(product.unitPrice), // Columna 2
-      currencyFormat.format(product.subtotal), // Columna 3
-      "", // Columna 4: Observaciones
+      productNameWithUnit,
+      product.quantity.toString(),
+      currencyFormat.format(product.unitPrice),
+      currencyFormat.format(product.subtotal),
+      "", // Observaciones
     ];
   }).toList();
 
-  // --- CAMBIO: HEADERS (Unidad eliminada) ---
+  // --- Generar datos de tabla para productos CDA ---
+  final List<List<String>> cdaTableData = cdaProducts.map((product) {
+    final unitName = unitMapping[product.unit]!['name']!;
+    final productNameWithUnit = '${product.name} (${unitName})';
+    return [
+      productNameWithUnit,
+      product.quantity.toString(),
+      currencyFormat.format(product.unitPrice),
+      currencyFormat.format(product.subtotal),
+      "", // Observaciones
+    ];
+  }).toList();
+
   final List<String> headers = [
-    'Producto (Unidad)', // Título actualizado
+    'Producto (Unidad)',
     'Cant.',
     'Precio Unit.',
     'Subtotal',
@@ -147,7 +172,7 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
         marginTop: 48,
         marginBottom: 48,
       ),
-      // --- Encabezado de Página ---
+      // --- Encabezado de Página (sin cambios) ---
       header: (pw.Context context) {
         return pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -175,7 +200,7 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
         );
       },
       
-      // --- PIE DE PÁGINA (CON RESUMEN PEQUEÑO) ---
+      // --- Pie de Página (con resumen total, sin cambios) ---
       footer: (pw.Context context) {
         return pw.Column(
           children: [
@@ -189,9 +214,8 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
                   style: pw.TextStyle(
                       font: helvetica, fontSize: 8, color: PdfColors.grey600),
                 ),
-                // Resumen en cada página
                 pw.Text(
-                  'Resumen: ${totalBultos.toStringAsFixed(0)} Bultos | ${currencyFormat.format(totalPrecio)}',
+                  'Resumen Total: ${totalBultos.toStringAsFixed(0)} Bultos | ${currencyFormat.format(totalPrecio)}',
                   style: pw.TextStyle(
                       font: helveticaBold,
                       fontSize: 8,
@@ -203,52 +227,115 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
         );
       },
       
+      // --- CAMBIO: El build ahora retorna una lista de widgets ---
       build: (pw.Context context) {
-        return [
-          // --- TABLA DE PRODUCTOS REDISEÑADA ---
-          pw.Table.fromTextArray(
-            headers: headers,
-            data: tableData,
-            // Estilo de la cabecera
-            headerStyle: pw.TextStyle(
-              font: helveticaBold,
-              fontSize: 9, 
-              color: PdfColors.white,
-            ),
-            headerDecoration: pw.BoxDecoration(
-              color: PdfColors.blueGrey800,
-            ),
-            // Estilo de las celdas
-            cellStyle: pw.TextStyle(
-              font: helvetica,
-              fontSize: 8, 
-            ),
-            // --- CAMBIO: Anchos de columna reajustados (5 columnas) ---
-            columnWidths: {
-              0: const pw.FlexColumnWidth(3.5), // Producto (ahora más ancho)
-              1: const pw.FlexColumnWidth(0.7), // Cant.
-              2: const pw.FlexColumnWidth(1.2), // Precio
-              3: const pw.FlexColumnWidth(1.2), // Subtotal
-              4: const pw.FlexColumnWidth(2.4), // Observaciones (un poco más ancho)
-            },
-            // --- CAMBIO: Alineación de celdas (5 columnas) ---
-            cellAlignments: {
-              0: pw.Alignment.centerLeft,
-              1: pw.Alignment.centerRight,
-              2: pw.Alignment.centerRight,
-              3: pw.Alignment.centerRight,
-              4: pw.Alignment.centerLeft, // Observaciones
-            },
-            rowDecoration: const pw.BoxDecoration(
-              border: pw.Border(
-                bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+        
+        final List<pw.Widget> widgets = [];
+
+        // --- 1. Tabla de Productos Regulares ---
+        if (regularTableData.isNotEmpty) {
+          widgets.add(
+            pw.Table.fromTextArray(
+              headers: headers,
+              data: regularTableData,
+              // Estilo de cabecera (Normal)
+              headerStyle: pw.TextStyle(
+                font: helveticaBold,
+                fontSize: 9, 
+                color: PdfColors.white,
+              ),
+              headerDecoration: pw.BoxDecoration(
+                color: PdfColors.blueGrey800,
+              ),
+              // Estilo de celdas (Normal)
+              cellStyle: pw.TextStyle(
+                font: helvetica,
+                fontSize: 8, 
+              ),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(3.5),
+                1: const pw.FlexColumnWidth(0.7),
+                2: const pw.FlexColumnWidth(1.2),
+                3: const pw.FlexColumnWidth(1.2),
+                4: const pw.FlexColumnWidth(2.4),
+              },
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerLeft,
+              },
+              rowDecoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
               ),
             ),
-          ),
-          
-          // El "Gran Total" al final del documento ya fue eliminado
-          // en el paso anterior.
-        ];
+          );
+        }
+
+        // --- 2. Tabla de Productos CDA (Estilo Gris) ---
+        if (cdaTableData.isNotEmpty) {
+          // Espaciador y Título
+          widgets.add(pw.SizedBox(height: 15));
+          widgets.add(
+            pw.Header(
+              level: 1,
+              text: 'Central de Abastos',
+              textStyle: pw.TextStyle(
+                font: helveticaBold,
+                fontSize: 12,
+                color: PdfColors.grey700,
+              )
+            )
+          );
+          widgets.add(pw.SizedBox(height: 5));
+
+          // Tabla CDA
+          widgets.add(
+            pw.Table.fromTextArray(
+              headers: headers,
+              data: cdaTableData,
+              // Estilo de cabecera (Gris)
+              headerStyle: pw.TextStyle(
+                font: helveticaBold,
+                fontSize: 9, 
+                color: PdfColors.white,
+              ),
+              headerDecoration: pw.BoxDecoration(
+                color: PdfColors.grey600, // <-- GRIS
+              ),
+              // Estilo de celdas (Gris)
+              cellStyle: pw.TextStyle(
+                font: helvetica,
+                fontSize: 8,
+                color: PdfColors.grey800, // <-- GRIS
+              ),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(3.5),
+                1: const pw.FlexColumnWidth(0.7),
+                2: const pw.FlexColumnWidth(1.2),
+                3: const pw.FlexColumnWidth(1.2),
+                4: const pw.FlexColumnWidth(2.4),
+              },
+              cellAlignments: {
+                0: pw.Alignment.centerLeft,
+                1: pw.Alignment.centerRight,
+                2: pw.Alignment.centerRight,
+                3: pw.Alignment.centerRight,
+                4: pw.Alignment.centerLeft,
+              },
+              rowDecoration: const pw.BoxDecoration(
+                border: pw.Border(
+                  bottom: pw.BorderSide(color: PdfColors.grey300, width: 0.5),
+                ),
+              ),
+            ),
+          );
+        }
+        
+        return widgets;
       },
     ),
   );
@@ -256,7 +343,7 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
 }
 
 
-// Wrapper para `compute`
+// --- (Sin cambios en el resto del archivo: _pdfGeneratorComputeWrapper, shareAllListsAsZip, etc.) ---
 Future<Uint8List> _pdfGeneratorComputeWrapper(Map<String, dynamic> data) async {
   final List<Product> products = data['products'].cast<Product>();
   final String? puntoName = data['puntoName'];
@@ -366,7 +453,7 @@ Future<void> shareAllListsAsZip(
 }
 
 // --- Funciones de exportación y compartición (INDIVIDUALES) ---
-
+// ... (Sin cambios aquí) ...
 Future<void> shareCsv(List<Product> items,
     {required String puntoId,
     required String puntoName,
@@ -406,8 +493,9 @@ Future<void> shareZip(List<Product> products,
   );
 }
 
-// --- FUNCIÓN HELPER INTERNA (EXISTENTE) ---
 
+// --- FUNCIÓN HELPER INTERNA (EXISTENTE) ---
+// ... (Sin cambios aquí) ...
 Future<void> _prepareAndShare({
   required BuildContext context,
   required List<Product> products,

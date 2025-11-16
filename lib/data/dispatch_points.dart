@@ -1,6 +1,7 @@
 // lib/data/dispatch_points.dart
 final Map<String, String> puntosDespacho = {
     "Atiquizaya, Atiquizaya": "Punto031",
+    "Altavist, Ilopango": "Punto036",
     "Ahuachapán, Ahuachapán Centro": "Punto042",
     "San Francisco Menéndez, Col La Palma": "Punto001",
     "Chalchuapa, Cancha de futbol Reparto Guadalupano": "Punto005",

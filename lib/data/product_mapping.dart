@@ -12,6 +12,7 @@ const Map<String, String> productNormalizationMap = {
   "NARANJA VALENCIA (CENTRAL DE ABASTOS)": "Naranja",
   "YUCA (CENTRAL DE ABASTOS)": "Yuca",
   "HUEVO EXTRA GRANDE (CENTRAL DE ABASTOS)": "Huevos Extra Grandes",
+  "LIMON (CENTRAL DE ABASTOS)": "Limon",
 
   // --- Mapeos de productos con ID 0 o vacío (Casos simples) ---
   

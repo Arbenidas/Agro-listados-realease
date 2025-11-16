@@ -14,7 +14,6 @@ import 'package:share_plus/share_plus.dart';
 import 'package:universal_html/html.dart' as html;
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
-import 'package:permission_handler/permission_handler.dart';
 import '../models/product.dart';
 import '../data/units.dart';
 import 'package:pdf/pdf.dart';

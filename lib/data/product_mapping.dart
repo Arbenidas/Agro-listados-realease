@@ -32,8 +32,14 @@ const Map<String, String> productNormalizationMap = {
   "SANDIA ": "Sandia", 
 
   // Productos con nombres diferentes
-  "NARANJA VALENCIA IMPORTADA": "Naranja", // Asignamos la importada a "Naranja"
-  
+  "NARANJA VALENCIA IMPORTADA": "Naranja",
+  "TOMATE 3RA": "Tomate de Tercera",
+  "BERENJENA 1RA": "Berenjena", // Asignamos la importada a "Naranja"
+  "SANDIA (CENTRAL DE ABASTOS)": "Sandia",
+  "REPOLLO (CENTRAL DE ABASTOS)":"Repollo",
+  "HUEVO GRANDE (CENTRAL DE ABASTOS)":"Huevo Grande",
+  "CEBOLLA ROJA (CENTRAL DE ABASTOS)":"Cebolla Morada",
+  "GUAYABA (CENTRAL DE ABASTOS)":"Guayaba"
   // --- Añade cualquier otro producto aquí ---
   // "NOMBRE_EN_CSV": "NombreEnProductsData",
 };

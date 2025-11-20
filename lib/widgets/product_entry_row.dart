@@ -4,11 +4,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_listados/models/product.dart';
-import 'package:flutter_listados/data/units.dart';
 
 // --- NUEVOS IMPORTS ---
 import 'package:dropdown_search/dropdown_search.dart';
-import 'package:flutter_listados/data/products_data.dart'; // Para defaultUnits
 
 class ProductEntryRow extends StatefulWidget {
   final Product initialProduct;
@@ -258,7 +256,7 @@ class _ProductEntryRowState extends State<ProductEntryRow>
           FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d*')),
         ],
         onChanged: (value) {
-          // No es necesario si _updateProduct se llama al desenfocar
+          _updateProduct();
         },
       ),
     );

@@ -174,7 +174,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
       _allProducts.removeWhere((p) => (p.name + p.id) == oldKey);
       _allProducts.add(correctedProduct);
       _allProducts
-        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
       // 4. Refresca la lista visible
       _filterProducts();
@@ -183,6 +183,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
 
   /// --- MODIFICADO: Bloquea el guardado si hay inválidos ---
   void _saveBulkEntry() {
+    FocusScope.of(context).unfocus();
     // 1. Revisa si AÚN quedan inválidos
     // Es posible que el usuario no haya corregido todos.
     bool hasInvalidProducts = false;
@@ -241,7 +242,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
         const SnackBar(content: Text('Generando PDF... por favor espere')),
       );
 
-      final pdfData = await compute(generateProductListPdf, productsToPrint);
+      await compute(generateProductListPdf, productsToPrint);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).hideCurrentSnackBar();

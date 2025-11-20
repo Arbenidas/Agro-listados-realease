@@ -1,5 +1,4 @@
 // lib/models/managed_list.dart
-import 'dart:convert';
 import 'package:flutter_listados/models/product.dart';
 import 'package:uuid/uuid.dart';
 
@@ -25,8 +24,8 @@ class ManagedList {
     required this.puntoId,
     List<Product>? products,
     String? id,
-  })  : this.id = id ?? uuid.v4(),
-        this.products = products ?? [];
+  })  : id = id ?? uuid.v4(),
+        products = products ?? [];
 
   Map<String, dynamic> toJson() {
     return {

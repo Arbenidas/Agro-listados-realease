@@ -14,7 +14,6 @@ import 'package:flutter_listados/data/dispatch_points.dart';
 import 'package:flutter_listados/data/product_icons.dart';
 import 'package:flutter_listados/data/products_data.dart';
 import 'package:flutter_listados/data/units.dart';
-import 'package:flutter_listados/pages/home_page.dart';
 import 'package:flutter_listados/models/managed_list.dart';
 import 'package:flutter_listados/models/product.dart';
 import 'package:flutter_listados/utils/export_utils.dart';
@@ -440,6 +439,9 @@ class _ProductManagementPageState extends State<ProductManagementPage>
               
               String idProducto = fields[3].trim();
               String nombre = fields[4].trim(); // <-- Nombre original
+              if (nombre.toUpperCase() == "PAQUETE DE BOLSA") {
+                continue; // Salta esta línea y sigue con la próxima
+              }
               final double quantityAsDouble =
                   double.tryParse(fields[7].trim()) ?? 0.0;
               final double unitPrice =
@@ -742,6 +744,16 @@ class _ProductManagementPageState extends State<ProductManagementPage>
 
               if (result == 'import' && currentList != null) {
                 _importCsvAndAddProducts(currentList);
+                // --- NUEVO: Opción para exportar solo CSV ---
+              } else if (result == 'export_csv' && currentList != null) {
+                // Llamamos a la función shareCsv que ya tienes en export_utils.dart
+                shareCsv(
+                  currentList.products,
+                  puntoId: currentList.puntoId,
+                  puntoName: currentList.puntoName,
+                  context: context,
+                );
+              // -------------------------------------------
               } else if (result == 'export_all') {
                 _showExportDialog();
               } else if (result == 'clear_products') {
@@ -758,6 +770,16 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                     Icon(Icons.upload_file, color: Colors.green),
                     SizedBox(width: 10),
                     Text('Importar CSV (a esta lista)'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem<String>(
+                value: 'export_csv',
+                child: Row(
+                  children: [
+                    Icon(Icons.table_view_outlined, color: Colors.teal),
+                    SizedBox(width: 10),
+                    Text('Descargar SOLO CSV (Actual)'),
                   ],
                 ),
               ),

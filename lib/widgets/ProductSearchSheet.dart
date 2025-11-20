@@ -2,7 +2,6 @@
 // Actualizado para usar la única fuente de datos de unidades
 
 import 'package:flutter/material.dart';
-import 'package:flutter_listados/data/units.dart'; // ✅ Nueva importación
 import 'package:flutter_listados/models/default_units.dart';
 import 'package:flutter_listados/models/product.dart';
 

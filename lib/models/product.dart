@@ -1,5 +1,7 @@
 // lib/models/product.dart
 // ... (Aquí iría la definición de Product y UnitType)
+// ignore_for_file: constant_identifier_names
+
 enum UnitType {
   Unidad,
   Caja,

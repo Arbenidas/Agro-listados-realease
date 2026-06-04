@@ -23,6 +23,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_listados/data/product_mapping.dart';
 
 import 'bulk_product_entry_page.dart';
+import '../widgets/ad_interstitial_dialog.dart';
 
 class ProductManagementPage extends StatefulWidget {
   // ... (código sin cambios) ...
@@ -593,7 +594,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
 
   // --- LÓGICA DE EXPORTACIÓN Y BORRADO ---
   // ... (Sin cambios aquí: _showExportDialog, ... _deleteAllAndExit) ...
-  Future<void> _showExportDialog() async {
+  void _showExportDialog() {
     if (_listas.every((lista) => lista.products.isEmpty)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -605,7 +606,13 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       }
       return;
     }
-    await shareAllListsAsZip(_listas, context);
+    AdInterstitialDialog.show(
+      context,
+      () => shareAllListsAsZip(_listas, context),
+      title: 'Exportar todo',
+      actionLabel: 'Descargar ZIP',
+      actionIcon: Icons.archive_outlined,
+    );
   }
 
   void _showClearProductsConfirmationDialog() {
@@ -743,17 +750,30 @@ class _ProductManagementPageState extends State<ProductManagementPage>
               }
 
               if (result == 'import' && currentList != null) {
-                _importCsvAndAddProducts(currentList);
-                // --- NUEVO: Opción para exportar solo CSV ---
-              } else if (result == 'export_csv' && currentList != null) {
-                // Llamamos a la función shareCsv que ya tienes en export_utils.dart
-                shareCsv(
-                  currentList.products,
-                  puntoId: currentList.puntoId,
-                  puntoName: currentList.puntoName,
-                  context: context,
+                final lista = currentList;
+                // Anuncio antes de abrir el selector de archivo
+                AdInterstitialDialog.show(
+                  context,
+                  () => _importCsvAndAddProducts(lista),
+                  title: 'Importar CSV',
+                  actionLabel: 'Seleccionar archivo',
+                  actionIcon: Icons.upload_file_outlined,
                 );
-              // -------------------------------------------
+              } else if (result == 'export_csv' && currentList != null) {
+                final lista = currentList;
+                // Anuncio antes de descargar CSV
+                AdInterstitialDialog.show(
+                  context,
+                  () => shareCsv(
+                    lista.products,
+                    puntoId: lista.puntoId,
+                    puntoName: lista.puntoName,
+                    context: context,
+                  ),
+                  title: 'Descargar CSV',
+                  actionLabel: 'Descargar ahora',
+                  actionIcon: Icons.table_view_outlined,
+                );
               } else if (result == 'export_all') {
                 _showExportDialog();
               } else if (result == 'clear_products') {

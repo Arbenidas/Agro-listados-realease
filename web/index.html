@@ -1,29 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
+  <meta name="description" content="Agro-listados: gestión de listas de productos agrícolas para puntos de venta.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="flutter_listados">
+  <meta name="apple-mobile-web-app-title" content="Agro-listados">
   <link rel="apple-touch-icon" href="icons/imagen_icono.png">
 
   <!-- Favicon -->
@@ -31,8 +19,164 @@
 
   <title>Agro-listados</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- ═══════════════════════════════════════════════════════════
+       GOOGLE ADSENSE
+       Reemplaza ca-pub-XXXXXXXXXXXXXXXX con tu Publisher ID real.
+       Obtén aprobación en: https://www.google.com/adsense/start
+       ═══════════════════════════════════════════════════════════ -->
+  <script async
+    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7702396954288314"
+    crossorigin="anonymous">
+  </script>
+
+  <style>
+    /* ─────────────────────────────────────────────
+       Empuja el canvas de Flutter hacia arriba para
+       que el banner no tape ningún contenido.
+       Flutter Web renderiza dentro de <flt-glass-pane>.
+       ───────────────────────────────────────────── */
+    :root {
+      --ad-bar-height: 40px;
+    }
+
+    flt-glass-pane {
+      bottom: var(--ad-bar-height) !important;
+    }
+
+    /* Banner de anuncio fijo en la parte inferior */
+    #bottom-ad-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 9999;
+      background: #ffffff;
+      border-top: 1px solid #e0e0e0;
+      text-align: center;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
+      height: var(--ad-bar-height);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #bottom-ad-bar ins {
+      display: block;
+      width: 100%;
+    }
+    /* Etiqueta discreta "Publicidad" */
+    #bottom-ad-bar::before {
+      content: 'Publicidad';
+      position: absolute;
+      top: 2px;
+      right: 8px;
+      font-size: 9px;
+      color: #bbb;
+      font-family: sans-serif;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
+
+  <!-- Banner de anuncio fijo en la parte inferior de la pantalla.
+       Instrucciones:
+       1. Ve a Google AdSense > Anuncios > Por unidad de anuncio > Anuncio de pantalla
+       2. Elige formato "Horizontal" y copia tu data-ad-slot
+       3. Reemplaza los valores XXXXXXXXXXXXXXXX y XXXXXXXXXX abajo -->
+  <div id="bottom-ad-bar">
+    <ins class="adsbygoogle"
+         style="display:block"
+         data-ad-format="fluid"
+         data-ad-layout-key="-f7+5u+4t-da+6l"
+         data-ad-client="ca-pub-7702396954288314"
+         data-ad-slot="4531784987"></ins>
+    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
+  </div>
+
+  <script>
+    // ─────────────────────────────────────────────────────────────────────
+    // CONTROL DEL BANNER Y CANVAS DE FLUTTER
+    // Resuelve dos problemas:
+    //   1. El banner no debe tapar el canvas de Flutter (margen inferior).
+    //   2. En móvil, cuando el teclado virtual abre, el banner se oculta
+    //      automáticamente para no robarle espacio a los formularios.
+    // ─────────────────────────────────────────────────────────────────────
+    (function() {
+      var AD_HEIGHT   = 40;   // px — debe coincidir con --ad-bar-height en CSS
+      var KB_THRESHOLD = 150; // px — cambio mínimo de viewport para detectar teclado
+
+      var adBar       = null;
+      var flutterPane = null;
+      var keyboardOpen = false;
+
+      // ── Aplica o quita el margen inferior al canvas de Flutter ──────────
+      function applyMargin(heightPx) {
+        if (!flutterPane) flutterPane = document.querySelector('flt-glass-pane');
+        if (flutterPane) {
+          flutterPane.style.setProperty('bottom', heightPx + 'px', 'important');
+        }
+      }
+
+      // ── Muestra u oculta el banner ─────────────────────────────────────
+      function showBanner(visible) {
+        if (!adBar) adBar = document.getElementById('bottom-ad-bar');
+        if (!adBar) return;
+        adBar.style.display = visible ? 'flex' : 'none';
+        applyMargin(visible ? AD_HEIGHT : 0);
+      }
+
+      // ── Detecta apertura/cierre del teclado virtual via visualViewport ──
+      // visualViewport.height baja cuando el teclado sube; window.innerHeight no.
+      function onViewportResize() {
+        if (!window.visualViewport) return;
+        var gap = window.innerHeight - window.visualViewport.height;
+        var kbNowOpen = gap > KB_THRESHOLD;
+        if (kbNowOpen !== keyboardOpen) {
+          keyboardOpen = kbNowOpen;
+          showBanner(!keyboardOpen); // oculta banner con teclado abierto
+        }
+      }
+
+      // ── Espera a que Flutter monte flt-glass-pane ──────────────────────
+      function waitForFlutter() {
+        flutterPane = document.querySelector('flt-glass-pane');
+        if (flutterPane) {
+          applyMargin(keyboardOpen ? 0 : AD_HEIGHT);
+          return;
+        }
+        var obs = new MutationObserver(function() {
+          flutterPane = document.querySelector('flt-glass-pane');
+          if (flutterPane) {
+            obs.disconnect();
+            applyMargin(keyboardOpen ? 0 : AD_HEIGHT);
+          }
+        });
+        obs.observe(document.body, { childList: true, subtree: true });
+      }
+
+      // ── Inicialización ─────────────────────────────────────────────────
+      document.addEventListener('DOMContentLoaded', function() {
+        adBar = document.getElementById('bottom-ad-bar');
+        waitForFlutter();
+
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', onViewportResize);
+          window.visualViewport.addEventListener('scroll', onViewportResize);
+        }
+      });
+
+      // ── Helper para el diálogo pre-descarga de Flutter ─────────────────
+      window.addEventListener('pushAdsbyGoogle', function() {
+        try { (window.adsbygoogle = window.adsbygoogle || []).push({}); }
+        catch(e) {}
+      });
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

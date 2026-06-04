@@ -1,11 +1,11 @@
 {
-    "name": "flutter_listados",
-    "short_name": "flutter_listados",
+    "name": "Agro-listados",
+    "short_name": "Agro-listados",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
+    "background_color": "#ffffff",
     "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "description": "Gestión de listas de productos agrícolas para puntos de venta.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

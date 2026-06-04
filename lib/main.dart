@@ -70,7 +70,7 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
+    Widget materialApp = MaterialApp(
       title: 'Listas de productos',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
@@ -101,5 +101,7 @@ class MyApp extends StatelessWidget {
       
       navigatorKey: navigatorKey,
     );
+
+    return materialApp;
   }
 }

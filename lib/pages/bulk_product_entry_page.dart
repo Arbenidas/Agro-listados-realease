@@ -11,6 +11,7 @@ import 'package:flutter_listados/utils/pdf_utils.dart';
 // --- NUEVOS IMPORTS ---
 import 'package:flutter_listados/data/product_mapping.dart';
 import '../widgets/product_entry_row.dart';
+import '../widgets/ad_interstitial_dialog.dart';
 // Asegúrate de tener dropdown_search en tu pubspec.yaml
 // (ya lo tenías)
 
@@ -238,18 +239,21 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
     }).toList();
 
     if (productsToPrint.isNotEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Generando PDF... por favor espere')),
-      );
-
-      await compute(generateProductListPdf, productsToPrint);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      // Usa el diálogo de anuncio antes de generar el PDF
+      AdInterstitialDialog.show(context, () async {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PDF generado exitosamente.')),
+          const SnackBar(content: Text('Generando PDF... por favor espere')),
         );
-      }
+
+        await compute(generateProductListPdf, productsToPrint);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('PDF generado exitosamente.')),
+          );
+        }
+      });
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

@@ -175,10 +175,10 @@ class _MyHomePageState extends State<MyHomePage> {
                     sliver: SliverGrid(
                       gridDelegate:
                           const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 300.0,
-                        mainAxisSpacing: 12.0,
-                        crossAxisSpacing: 12.0,
-                        childAspectRatio: 2.5,
+                        maxCrossAxisExtent: 340.0,
+                        mainAxisSpacing: 14.0,
+                        crossAxisSpacing: 14.0,
+                        childAspectRatio: 2.2,
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
@@ -252,20 +252,19 @@ class _MyHomePageState extends State<MyHomePage> {
           });
         },
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Row(
             children: [
               Icon(
                 Icons.edit_note_rounded,
                 color: Theme.of(context).colorScheme.onSecondaryContainer,
-                size: 28,
+                size: 32,
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
                 child: Text(
                   'Continuar editando listas',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color:
                             Theme.of(context).colorScheme.onSecondaryContainer,
                       ),
@@ -273,7 +272,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               Icon(
                 Icons.arrow_forward_ios,
-                size: 16,
+                size: 18,
                 color: Theme.of(context).colorScheme.onSecondaryContainer,
               ),
             ],
@@ -300,36 +299,33 @@ class _PuntoCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 14.0, vertical: 10.0),
           child: Row(
             children: [
               CircleAvatar(
+                radius: 22,
                 backgroundColor:
-                    Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                    Theme.of(context).colorScheme.primary.withOpacity(0.12),
                 child: Icon(
                   Icons.store_mall_directory_outlined,
                   color: Theme.of(context).colorScheme.primary,
+                  size: 22,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      puntoName,
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                child: Text(
+                  puntoName,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        height: 1.25,
+                      ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
-              Icon(Icons.arrow_forward_ios,
-                  size: 16, color: Colors.grey[400]),
+              const SizedBox(width: 4),
+              Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey[400]),
             ],
           ),
         ),

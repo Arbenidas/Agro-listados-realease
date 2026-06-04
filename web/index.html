@@ -131,10 +131,24 @@
         }
       }
 
-      if (window.visualViewport) {
-        window.visualViewport.addEventListener('resize', onViewportResize);
-      }
+      // ── Inicialización ─────────────────────────────────────────────────
+      document.addEventListener('DOMContentLoaded', function() {
+        adBar = document.getElementById('bottom-ad-bar');
+
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener('resize', onViewportResize);
+          window.visualViewport.addEventListener('scroll', onViewportResize);
+        }
+      });
+
+      // ── Helper para el diálogo pre-descarga de Flutter ─────────────────
+      window.addEventListener('pushAdsbyGoogle', function() {
+        try { (window.adsbygoogle = window.adsbygoogle || []).push({}); }
+        catch(e) {}
+      });
     })();
   </script>
+
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

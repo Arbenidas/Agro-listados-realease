@@ -102,6 +102,13 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
     );
 
+    if (kIsWeb) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 45.0),
+        child: materialApp,
+      );
+    }
+    
     return materialApp;
   }
 }

@@ -1,11 +1,13 @@
 // lib/pages/home_page.dart
 // MODIFICADO: Se añade un 'routeName' estático.
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_listados/data/dispatch_points.dart';
 import 'package:flutter_listados/pages/product_management_page.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:universal_html/html.dart' as html;
 
 class MyHomePage extends StatefulWidget {
   // --- LÍNEA AÑADIDA ---
@@ -120,6 +122,7 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
         backgroundColor: Theme.of(c).colorScheme.primary,
         foregroundColor: Theme.of(c).colorScheme.onPrimary,
+        actions: kIsWeb ? [_buildInfoMenu(c)] : null,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(80.0),
           child: Padding(
@@ -226,6 +229,51 @@ class _MyHomePageState extends State<MyHomePage> {
           ],
         ),
       ),
+    );
+  }
+
+  // --- MENÚ DE INFORMACIÓN (solo web) ---
+  // Enlaza a las páginas de contenido estáticas del sitio.
+  Widget _buildInfoMenu(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: Icon(Icons.info_outline,
+          color: Theme.of(context).colorScheme.onPrimary),
+      tooltip: 'Información y ayuda',
+      onSelected: (page) {
+        if (kIsWeb) {
+          html.window.open(page, '_self');
+        }
+      },
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: 'acerca.html',
+          child: ListTile(
+            leading: Icon(Icons.eco_outlined),
+            title: Text('Acerca de'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'guia.html',
+          child: ListTile(
+            leading: Icon(Icons.menu_book_outlined),
+            title: Text('Guía de uso'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'preguntas-frecuentes.html',
+          child: ListTile(
+            leading: Icon(Icons.help_outline),
+            title: Text('Preguntas frecuentes'),
+          ),
+        ),
+        PopupMenuItem(
+          value: 'privacidad.html',
+          child: ListTile(
+            leading: Icon(Icons.privacy_tip_outlined),
+            title: Text('Privacidad'),
+          ),
+        ),
+      ],
     );
   }
 

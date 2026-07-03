@@ -1,12 +1,22 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
   <base href="$FLUTTER_BASE_HREF">
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Agro-listados: gestión de listas de productos agrícolas para puntos de venta.">
+  <meta name="description" content="Agro-listados: herramienta web gratuita para crear, organizar y exportar listas de productos agrícolas por punto de venta. Genera PDF, Excel y CSV en segundos.">
+  <meta name="keywords" content="listas de productos agrícolas, punto de venta, inventario agrícola, exportar PDF, exportar Excel, gestión de pedidos, agro">
+  <meta name="author" content="Agro-listados">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://agro-listado-modoexcel.netlify.app/">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Agro-listados — Gestión de listas de productos agrícolas">
+  <meta property="og:description" content="Crea, organiza y exporta listas de productos agrícolas por punto de venta. Gratis y sin instalar nada.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://agro-listado-modoexcel.netlify.app/">
 
   <!-- iOS meta tags & icons -->
   <meta name="mobile-web-app-capable" content="yes">
@@ -17,137 +27,41 @@
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="icons/imagen_icono.png"/>
 
-  <title>Agro-listados</title>
+  <title>Agro-listados — Gestión de listas de productos agrícolas</title>
   <link rel="manifest" href="manifest.json">
 
   <!-- ═══════════════════════════════════════════════════════════
        GOOGLE ADSENSE
-       Reemplaza ca-pub-XXXXXXXXXXXXXXXX con tu Publisher ID real.
-       Obtén aprobación en: https://www.google.com/adsense/start
+       El script se carga en todo el sitio para verificación. Los
+       anuncios SOLO se muestran junto al contenido de las páginas
+       de contenido (acerca.html, guia.html, etc.), nunca dentro de
+       la herramienta (que se estaría "editando"), conforme a las
+       políticas del programa.
        ═══════════════════════════════════════════════════════════ -->
   <script async
     src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7702396954288314"
     crossorigin="anonymous">
   </script>
-
-  <style>
-    /* ─────────────────────────────────────────────
-       Empuja el canvas de Flutter hacia arriba para
-       que el banner no tape ningún contenido.
-       Flutter Web renderiza dentro de <flt-glass-pane>.
-       ───────────────────────────────────────────── */
-    :root {
-      --ad-bar-height: 40px;
-    }
-
-    flt-glass-pane {
-      bottom: var(--ad-bar-height) !important;
-    }
-
-    /* Banner de anuncio fijo en la parte inferior */
-    #bottom-ad-bar {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      z-index: 9999;
-      background: #ffffff;
-      border-top: 1px solid #e0e0e0;
-      text-align: center;
-      box-shadow: 0 -2px 8px rgba(0,0,0,0.10);
-      height: var(--ad-bar-height);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-    }
-    #bottom-ad-bar ins {
-      display: block;
-      width: 100%;
-    }
-    /* Etiqueta discreta "Publicidad" */
-    #bottom-ad-bar::before {
-      content: 'Publicidad';
-      position: absolute;
-      top: 2px;
-      right: 8px;
-      font-size: 9px;
-      color: #bbb;
-      font-family: sans-serif;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      pointer-events: none;
-    }
-  </style>
 </head>
 <body>
 
-  <!-- Banner de anuncio fijo en la parte inferior de la pantalla.
-       Instrucciones:
-       1. Ve a Google AdSense > Anuncios > Por unidad de anuncio > Anuncio de pantalla
-       2. Elige formato "Horizontal" y copia tu data-ad-slot
-       3. Reemplaza los valores XXXXXXXXXXXXXXXX y XXXXXXXXXX abajo -->
-  <div id="bottom-ad-bar">
-    <ins class="adsbygoogle"
-         style="display:block"
-         data-ad-format="fluid"
-         data-ad-layout-key="-f7+5u+4t-da+6l"
-         data-ad-client="ca-pub-7702396954288314"
-         data-ad-slot="4531784987"></ins>
-    <script>(adsbygoogle = window.adsbygoogle || []).push({});</script>
-  </div>
-
-  <script>
-    // ─────────────────────────────────────────────────────────────────────
-    // CONTROL DEL BANNER Y CANVAS DE FLUTTER
-    // Resuelve dos problemas:
-    //   1. El banner no debe tapar el canvas de Flutter (margen inferior).
-    //   2. En móvil, cuando el teclado virtual abre, el banner se oculta
-    //      automáticamente para no robarle espacio a los formularios.
-    // ─────────────────────────────────────────────────────────────────────
-    (function() {
-      var AD_HEIGHT   = 40;   // px
-      var KB_THRESHOLD = 150; // px — cambio mínimo de viewport para detectar teclado
-
-      var adBar       = null;
-      var keyboardOpen = false;
-
-      // ── Muestra u oculta el banner ─────────────────────────────────────
-      function showBanner(visible) {
-        if (!adBar) adBar = document.getElementById('bottom-ad-bar');
-        if (!adBar) return;
-        adBar.style.display = visible ? 'flex' : 'none';
-      }
-
-      // ── Detecta apertura/cierre del teclado virtual via visualViewport ──
-      // visualViewport.height baja cuando el teclado sube; window.innerHeight no.
-      function onViewportResize() {
-        if (!window.visualViewport) return;
-        var gap = window.innerHeight - window.visualViewport.height;
-        var kbNowOpen = gap > KB_THRESHOLD;
-        if (kbNowOpen !== keyboardOpen) {
-          keyboardOpen = kbNowOpen;
-          showBanner(!keyboardOpen); // oculta banner con teclado abierto
-        }
-      }
-
-      // ── Inicialización ─────────────────────────────────────────────────
-      document.addEventListener('DOMContentLoaded', function() {
-        adBar = document.getElementById('bottom-ad-bar');
-
-        if (window.visualViewport) {
-          window.visualViewport.addEventListener('resize', onViewportResize);
-          window.visualViewport.addEventListener('scroll', onViewportResize);
-        }
-      });
-
-      // ── Helper para el diálogo pre-descarga de Flutter ─────────────────
-      window.addEventListener('pushAdsbyGoogle', function() {
-        try { (window.adsbygoogle = window.adsbygoogle || []).push({}); }
-        catch(e) {}
-      });
-    })();
-  </script>
+  <!-- Contenido rastreable para buscadores y usuarios sin JavaScript.
+       Permite descubrir las páginas de contenido del sitio. -->
+  <noscript>
+    <h1>Agro-listados</h1>
+    <p>
+      Agro-listados es una herramienta web gratuita para crear, organizar y
+      exportar listas de productos agrícolas por punto de venta. Genera archivos
+      PDF, Excel y CSV listos para compartir con tu equipo o tus clientes.
+    </p>
+    <p>Esta aplicación necesita JavaScript. Mientras tanto, puedes visitar:</p>
+    <ul>
+      <li><a href="acerca.html">Acerca de Agro-listados</a></li>
+      <li><a href="guia.html">Guía de uso paso a paso</a></li>
+      <li><a href="preguntas-frecuentes.html">Preguntas frecuentes</a></li>
+      <li><a href="privacidad.html">Política de privacidad</a></li>
+    </ul>
+  </noscript>
 
   <script src="flutter_bootstrap.js" async></script>
 </body>

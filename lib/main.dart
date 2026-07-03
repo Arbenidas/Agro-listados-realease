@@ -102,13 +102,9 @@ class MyApp extends StatelessWidget {
       navigatorKey: navigatorKey,
     );
 
-    if (kIsWeb) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 45.0),
-        child: materialApp,
-      );
-    }
-    
+    // Ya no reservamos espacio inferior para un banner de anuncios: la app
+    // (herramienta) no muestra anuncios. Los anuncios viven en las páginas de
+    // contenido estáticas (acerca.html, guia.html, etc.).
     return materialApp;
   }
 }

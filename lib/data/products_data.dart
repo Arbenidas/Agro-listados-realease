@@ -93,7 +93,7 @@ const Map<String, String> productosDisponibles = {
   "Jocote de Azucaron": "defa9469",
   "Lechuga Escarola": "aef77fa0",
   "Loroco": "Producto019",
-  "Manzana Pink Lady": "138a0457",
+  "Manzana Pink Lady": "eaeb5455",
   "Marshmallow": "c2466763",
   "Olor": "e1e2e86d",
   "Papa Mexicana": "52a1a57d",

@@ -42,6 +42,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     with TickerProviderStateMixin {
   final List<ManagedList> _listas = [];
   late TabController _tabController;
+  late TabController _subTabController;
 
   late final Map<String, UnitType> _inverseUnitMap;
   bool _isLoading = true;
@@ -53,9 +54,24 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   @override
   void initState() {
     super.initState();
+    _subTabController = TabController(length: 2, vsync: this);
+    _subTabController.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
+    });
     _initializeInverseUnitMap();
     _initializeNormalizationMaps();
     _loadAllLists(initialPuntoName: widget.initialPuntoName);
+  }
+
+  @override
+  void dispose() {
+    _subTabController.dispose();
+    if (!_isLoading) {
+      _tabController.dispose();
+    }
+    super.dispose();
   }
 
   // --- Nueva función para normalizar texto (ignora tildes, mayúsculas) ---
@@ -370,7 +386,11 @@ class _ProductManagementPageState extends State<ProductManagementPage>
   void _addManualProduct(Product newProduct, ManagedList lista) {
     setState(() {
       final existingIndex = lista.products.indexWhere(
-        (p) => p.id == newProduct.id && p.unitPrice == newProduct.unitPrice,
+        (p) =>
+            p.isCdaProduct == newProduct.isCdaProduct &&
+            p.id == newProduct.id &&
+            p.unitPrice == newProduct.unitPrice &&
+            p.unit == newProduct.unit,
       );
 
       if (existingIndex != -1) {
@@ -430,6 +450,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
 
         final lines = fileContent.split('\n').skip(1);
         final List<Product> importedProducts = [];
+        final bool isCdaTabActive = _subTabController.index == 1;
 
         for (var line in lines) {
           if (line.trim().isEmpty) continue;
@@ -449,6 +470,9 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                   double.tryParse(fields[6].trim()) ?? 0.0;
               final String unitName = fields[9].trim();
               UnitType unit = _getUnitTypeFromString(unitName);
+
+              final bool isRowCda = isCdaTabActive ||
+                  nombre.toUpperCase().contains("CENTRAL DE ABASTOS");
 
               if (idProducto.isEmpty || idProducto == "0") {
                 String normalizedCsvName = _normalizeString(nombre);
@@ -481,6 +505,7 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                 quantity: quantityAsDouble.toInt(),
                 unitPrice: unitPrice,
                 unit: unit,
+                isCda: isRowCda,
               );
               importedProducts.add(product);
 
@@ -516,27 +541,25 @@ class _ProductManagementPageState extends State<ProductManagementPage>
     }
   }
 
-  void _editProduct(int index, ManagedList lista, bool isCdaProduct) async {
-    // --- CAMBIO: Necesitamos el índice original ---
-    // En lugar de `index`, buscamos el producto en la lista principal
-    final originalIndex = lista.products
-        .indexWhere((p) => p == (isCdaProduct ? lista.cdaProducts[index] : lista.regularProducts[index]));
+  void _editProduct(Product productToEdit, ManagedList lista) async {
+    final originalIndex = lista.products.indexOf(productToEdit);
 
     if (originalIndex == -1) return; // No se encontró (no debería pasar)
     
     final initialProduct = lista.products[originalIndex];
-    // ... el resto de la función _editProduct no cambia
     final result = await showModalBottomSheet<Product?>(
       context: context,
       isScrollControlled: true,
       builder: (_) => ProductSearchSheet(
         productosDisponibles: productosDisponibles,
         initialProduct: initialProduct,
+        isCda: initialProduct.isCdaProduct,
       ),
     );
     if (result != null) {
       setState(() {
-        lista.products[originalIndex] = result;
+        lista.products[originalIndex] =
+            result.copyWith(isCda: initialProduct.isCdaProduct);
       });
       _saveProducts();
     }
@@ -576,17 +599,29 @@ class _ProductManagementPageState extends State<ProductManagementPage>
 
 
   void _navigateToBulkEntry(ManagedList lista) async {
-    final updatedBulkProducts = await Navigator.of(context).push(
+    final bool isCdaTab = _subTabController.index == 1;
+    final subListProducts = lista.products
+        .where((p) => p.isCdaProduct == isCdaTab)
+        .map((p) => Product.fromJson(p.toJson()))
+        .toList();
+
+    final updatedBulkProducts = await Navigator.of(context).push<List<Product>>(
       MaterialPageRoute(
         builder: (context) => BulkProductEntryPage(
-          currentProducts:
-              lista.products.map((p) => Product.fromJson(p.toJson())).toList(),
+          currentProducts: subListProducts,
+          isCda: isCdaTab,
         ),
       ),
     );
     if (updatedBulkProducts != null) {
       setState(() {
-        lista.products = updatedBulkProducts;
+        final otherProducts = lista.products
+            .where((p) => p.isCdaProduct != isCdaTab)
+            .toList();
+        lista.products = [
+          ...otherProducts,
+          ...updatedBulkProducts.map((p) => p.copyWith(isCda: isCdaTab)),
+        ];
       });
       _saveProducts();
     }
@@ -864,88 +899,117 @@ class _ProductManagementPageState extends State<ProductManagementPage>
           }).toList(),
         ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: _listas.map((lista) {
-          return _buildProductListUI(lista);
-        }).toList(),
+      body: Column(
+        children: [
+          Material(
+            color: Theme.of(context).colorScheme.surface,
+            elevation: 1,
+            child: TabBar(
+              controller: _subTabController,
+              labelColor: primaryColor,
+              unselectedLabelColor: Colors.grey[600],
+              indicatorColor: primaryColor,
+              indicatorSize: TabBarIndicatorSize.tab,
+              indicatorWeight: 2.5,
+              tabs: const [
+                Tab(text: 'Agregar Producto Propio'),
+                Tab(text: 'Agregar Producto de CDA'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: _listas.map((lista) {
+                return TabBarView(
+                  controller: _subTabController,
+                  children: [
+                    _buildProductSubListUI(lista, isCda: false),
+                    _buildProductSubListUI(lista, isCda: true),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ],
       ),
       floatingActionButton: _listas.isNotEmpty
-          ? Column(
-              mainAxisAlignment: MainAxisAlignment.end,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                // Botón secundario (Excel) - pequeño
-                FloatingActionButton(
-                  heroTag: 'addBulkBtn',
-                  onPressed: () {
-                    if (_listas.isNotEmpty) {
-                      _navigateToBulkEntry(_listas[_tabController.index]);
-                    }
-                  },
-                  tooltip: 'Entrada Masiva (Excel)',
-                  mini: true,
-                  child: const Icon(Icons.table_chart_outlined),
-                ),
-                const SizedBox(height: 12),
-                // Botón primario (Añadir Manual) - extendido
-                FloatingActionButton.extended(
-                  heroTag: 'addProductBtn',
-                  onPressed: () async {
-                    if (_listas.isEmpty) return;
-                    final result = await showModalBottomSheet<Product?>(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => ProductSearchSheet(
-                        productosDisponibles: productosDisponibles,
-                      ),
-                    );
-                    if (result != null) {
-                      _addManualProduct(result, _listas[_tabController.index]);
-                    }
-                  },
-                  label: const Text('Añadir Producto'),
-                  icon: const Icon(Icons.add),
-                ),
-              ],
+          ? Builder(
+              builder: (context) {
+                final bool isCdaTab = _subTabController.index == 1;
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    // Botón secundario (Excel) - pequeño
+                    FloatingActionButton(
+                      heroTag: 'addBulkBtn',
+                      onPressed: () {
+                        if (_listas.isNotEmpty) {
+                          _navigateToBulkEntry(_listas[_tabController.index]);
+                        }
+                      },
+                      tooltip: isCdaTab
+                          ? 'Entrada Masiva (CDA)'
+                          : 'Entrada Masiva (Propio)',
+                      mini: true,
+                      child: const Icon(Icons.table_chart_outlined),
+                    ),
+                    const SizedBox(height: 12),
+                    // Botón primario (Añadir Manual) - extendido
+                    FloatingActionButton.extended(
+                      heroTag: 'addProductBtn',
+                      onPressed: () async {
+                        if (_listas.isEmpty) return;
+                        final result = await showModalBottomSheet<Product?>(
+                          context: context,
+                          isScrollControlled: true,
+                          builder: (_) => ProductSearchSheet(
+                            productosDisponibles: productosDisponibles,
+                            isCda: isCdaTab,
+                          ),
+                        );
+                        if (result != null) {
+                          _addManualProduct(
+                            result.copyWith(isCda: isCdaTab),
+                            _listas[_tabController.index],
+                          );
+                        }
+                      },
+                      label: Text(isCdaTab
+                          ? 'Añadir Producto de CDA'
+                          : 'Añadir Producto Propio'),
+                      icon: const Icon(Icons.add),
+                    ),
+                  ],
+                );
+              },
             )
           : null,
     );
   }
 
-  // ---
-  // --- ¡¡WIDGET HELPER MODIFICADO!! (REQ 2 y 3) ---
-  // ---
-  Widget _buildProductListUI(ManagedList lista) {
-    final products = lista.products;
+  Widget _buildProductSubListUI(ManagedList lista, {required bool isCda}) {
+    final allProducts = lista.products;
+    final subProducts = allProducts
+        .where((p) => p.isCdaProduct == isCda)
+        .toList()
+      ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
-    // --- CAMBIO: Separar listas ---
-    final cdaProducts = products
-        .where((p) => p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
-        .toList();
-    final regularProducts = products
-        .where((p) => !p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
-        .toList();
-
-    // --- CAMBIO: Ordenar listas por separado ---
-    regularProducts
-        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    cdaProducts
-        .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-    
-    // Guardar las listas ordenadas en el objeto `ManagedList`
-    // para que `_editProduct` y `_deleteProduct` puedan encontrar el índice correcto.
-    lista.regularProducts = regularProducts;
-    lista.cdaProducts = cdaProducts;
-
-    final totalQuantity =
-        products.fold<double>(0.0, (sum, product) => sum + product.quantity);
-    final totalPrecio = products.fold<double>(
+    final subTotalQuantity = subProducts.fold<double>(
+        0.0, (sum, product) => sum + product.quantity);
+    final subTotalPrecio = subProducts.fold<double>(
         0.0, (sum, product) => sum + (product.quantity * product.unitPrice));
 
+    final globalTotalQuantity = allProducts.fold<double>(
+        0.0, (sum, product) => sum + product.quantity);
+    final globalTotalPrecio = allProducts.fold<double>(
+        0.0, (sum, product) => sum + (product.quantity * product.unitPrice));
+    final bool hasOtherTabProducts =
+        allProducts.any((p) => p.isCdaProduct != isCda);
+
     // --- Estado Vacío ---
-    if (products.isEmpty) {
-      // ... (sin cambios) ...
+    if (subProducts.isEmpty) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32.0),
@@ -976,10 +1040,10 @@ class _ProductManagementPageState extends State<ProductManagementPage>
 
     // --- Lista con Productos ---
     return ListView(
-      key: ValueKey(lista.id),
+      key: ValueKey('${lista.id}_${isCda ? "cda" : "propio"}'),
       padding: const EdgeInsets.fromLTRB(8, 16, 8, 100), // Padding para FABs
       children: [
-        // --- Tarjeta de Resumen (sin cambios) ---
+        // --- Tarjeta de Resumen ---
         Card(
           elevation: 4,
           color: Theme.of(context).colorScheme.primary.withOpacity(0.05),
@@ -989,7 +1053,9 @@ class _ProductManagementPageState extends State<ProductManagementPage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Resumen: ${lista.puntoName}',
+                  isCda
+                      ? 'Resumen CDA: ${lista.puntoName}'
+                      : 'Resumen Propio: ${lista.puntoName}',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.primary,
@@ -1001,31 +1067,51 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                   children: [
                     _buildSummaryInfo(
                       context,
-                      'Bultos Totales',
-                      totalQuantity.toStringAsFixed(0),
+                      'Bultos (${isCda ? "CDA" : "Propio"})',
+                      subTotalQuantity.toStringAsFixed(0),
                       Icons.calculate_outlined,
                     ),
                     _buildSummaryInfo(
                       context,
-                      'Costo Total',
+                      'Costo (${isCda ? "CDA" : "Propio"})',
                       NumberFormat.currency(symbol: '\$')
-                          .format(totalPrecio),
+                          .format(subTotalPrecio),
                       Icons.monetization_on_outlined,
                     ),
                   ],
                 ),
+                if (hasOtherTabProducts) ...[
+                  const Divider(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Total General (Propio + CDA):',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.grey[700],
+                            ),
+                      ),
+                      Text(
+                        '${globalTotalQuantity.toStringAsFixed(0)} bultos | ${NumberFormat.currency(symbol: '\$').format(globalTotalPrecio)}',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
         ),
         const SizedBox(height: 16),
 
-        // --- CAMBIO: Lista de Productos (Parte 1: Regulares) ---
-        ...regularProducts.map((product) {
-          final index = regularProducts.indexOf(product);
+        ...subProducts.map((product) {
           return Dismissible(
             key: ValueKey(
-                product.id + product.name + product.quantity.toString()),
+                '${product.id}_${product.name}_${product.isCdaProduct}_${product.unitPrice}_${product.quantity}'),
             direction: DismissDirection.endToStart,
             onDismissed: (direction) {
               _deleteProduct(lista, product);
@@ -1046,19 +1132,20 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                 ],
               ),
             ),
-            child: Card( // --- Sin opacidad ---
+            child: Card(
               margin: const EdgeInsets.symmetric(vertical: 4),
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor:
-                      Theme.of(context).colorScheme.primaryContainer,
+                  backgroundColor: isCda
+                      ? Colors.grey[200]
+                      : Theme.of(context).colorScheme.primaryContainer,
                   child: Text(
                     getEmojiForProduct(product.name),
                     style: const TextStyle(fontSize: 24),
                   ),
                 ),
                 title: Text(product.name,
-                    style: TextStyle(fontWeight: FontWeight.bold)),
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(
                   '${product.quantity} ${unitMapping[product.unit]!['name'] ?? 'Unidad'} x \$${product.unitPrice.toStringAsFixed(2)}',
                 ),
@@ -1070,13 +1157,18 @@ class _ProductManagementPageState extends State<ProductManagementPage>
                           .format(product.subtotal),
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Theme.of(context).colorScheme.primary,
+                        color: isCda
+                            ? Colors.grey[700]
+                            : Theme.of(context).colorScheme.primary,
                         fontSize: 15,
                       ),
                     ),
                     IconButton(
-                      icon: const Icon(Icons.edit_outlined, color: Colors.blue),
-                      onPressed: () => _editProduct(index, lista, false), // false = no es CDA
+                      icon: Icon(
+                        Icons.edit_outlined,
+                        color: isCda ? Colors.grey[600] : Colors.blue,
+                      ),
+                      onPressed: () => _editProduct(product, lista),
                       tooltip: 'Editar producto',
                     ),
                   ],
@@ -1084,82 +1176,12 @@ class _ProductManagementPageState extends State<ProductManagementPage>
               ),
             ),
           );
-        }).toList(),
-
-        // --- CAMBIO: Título y Lista de Productos (Parte 2: CDA) ---
-        if (cdaProducts.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.only(top: 24, left: 16, right: 16, bottom: 8),
-            child: Text(
-              "Central de Abastos",
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: Colors.grey[600],
-                    fontStyle: FontStyle.italic,
-                  ),
-            ),
-          ),
-          
-        ...cdaProducts.map((product) {
-          final index = cdaProducts.indexOf(product);
-          return Dismissible(
-            key: ValueKey(
-                product.id + product.name + product.quantity.toString()),
-            direction: DismissDirection.endToStart,
-            onDismissed: (direction) {
-              _deleteProduct(lista, product);
-            },
-            background: Container(
-              color: Colors.red[700],
-              // ... (fondo igual al anterior) ...
-            ),
-            child: Opacity( // --- Con opacidad (más gris) ---
-              opacity: 0.75, 
-              child: Card(
-                margin: const EdgeInsets.symmetric(vertical: 4),
-                // color: Colors.grey[50], // Alternativa a la opacidad
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: Colors.grey[200], // Avatar gris
-                    child: Text(
-                      getEmojiForProduct(product.name),
-                      style: const TextStyle(fontSize: 24),
-                    ),
-                  ),
-                  title: Text(product.name,
-                      style: TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: Text(
-                    '${product.quantity} ${unitMapping[product.unit]!['name'] ?? 'Unidad'} x \$${product.unitPrice.toStringAsFixed(2)}',
-                  ),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        NumberFormat.currency(symbol: '\$')
-                            .format(product.subtotal),
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.grey[700], // Total gris
-                          fontSize: 15,
-                        ),
-                      ),
-                      IconButton(
-                        icon: Icon(Icons.edit_outlined, color: Colors.grey[600]), // Icono gris
-                        onPressed: () => _editProduct(index, lista, true), // true = es CDA
-                        tooltip: 'Editar producto',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }).toList(),
+        }),
       ],
     );
   }
 
   // Helper para la tarjeta de resumen
-  // ... (Sin cambios aquí) ...
   Widget _buildSummaryInfo(
       BuildContext context, String title, String value, IconData icon) {
     return Row(
@@ -1185,18 +1207,4 @@ class _ProductManagementPageState extends State<ProductManagementPage>
       ],
     );
   }
-}
-
-// --- CAMBIO: Añadir estas dos listas al modelo ManagedList ---
-// (Esto es necesario para que _editProduct y _deleteProduct funcionen
-// después de ordenar las listas por separado)
-extension ListSeparation on ManagedList {
-  static final Map<String, List<Product>> _regularProductsCache = {};
-  static final Map<String, List<Product>> _cdaProductsCache = {};
-
-  List<Product> get regularProducts => _regularProductsCache[id] ?? [];
-  set regularProducts(List<Product> value) => _regularProductsCache[id] = value;
-
-  List<Product> get cdaProducts => _cdaProductsCache[id] ?? [];
-  set cdaProducts(List<Product> value) => _cdaProductsCache[id] = value;
 }

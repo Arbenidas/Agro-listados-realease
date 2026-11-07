@@ -17,10 +17,12 @@ import '../widgets/ad_interstitial_dialog.dart';
 
 class BulkProductEntryPage extends StatefulWidget {
   final List<Product> currentProducts;
+  final bool isCda;
 
   const BulkProductEntryPage({
     super.key,
     required this.currentProducts,
+    this.isCda = false,
   });
 
   @override
@@ -112,7 +114,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
       }
     }
 
-    // Agrega el resto del catálogo (productos que no estaban en la lista)
+      // Agrega el resto del catálogo (productos que no estaban en la lista)
     for (var entry in productosDisponibles.entries) {
       final uniqueKey = entry.key + entry.value;
       _tempProductsState.putIfAbsent(uniqueKey, () {
@@ -122,6 +124,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
           quantity: 0,
           unitPrice: 0.0,
           unit: defaultUnits[entry.key] ?? UnitType.Unidad,
+          isCda: widget.isCda,
         );
       });
     }
@@ -144,7 +147,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
 
   void _onProductRowChanged(Product updatedProduct) {
     _tempProductsState[updatedProduct.name + updatedProduct.id] =
-        updatedProduct;
+        updatedProduct.copyWith(isCda: widget.isCda);
   }
 
   /// --- NUEVO: Callback para cuando un producto es corregido manualmente ---
@@ -159,6 +162,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
       quantity: oldProduct.quantity, // Mantiene cantidad
       unitPrice: oldProduct.unitPrice, // Mantiene precio
       unit: defaultUnits[newProductEntry.key] ?? UnitType.Unidad, // Unidad por defecto
+      isCda: widget.isCda,
     );
 
     final newKey = correctedProduct.name + correctedProduct.id;
@@ -222,7 +226,7 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
       }
       // Filtro principal: solo devuelve los que tienen datos
       return p.quantity > 0 || p.unitPrice > 0;
-    }).toList();
+    }).map((p) => p.copyWith(isCda: widget.isCda)).toList();
 
 
     // 4. Procede a guardar
@@ -275,7 +279,9 @@ class _BulkProductEntryPageState extends State<BulkProductEntryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Entrada de Productos (Estilo Excel)'),
+        title: Text(widget.isCda
+            ? 'Entrada Masiva - Producto de CDA'
+            : 'Entrada Masiva - Producto Propio'),
         actions: [
           // Tu acción de PDF, si la tenías
           IconButton(

@@ -8,11 +8,13 @@ import 'package:flutter_listados/models/product.dart';
 class ProductSearchSheet extends StatefulWidget {
   final Map<String, String> productosDisponibles;
   final Product? initialProduct; // ✅ Ahora es opcional y para edición
+  final bool isCda;
 
   const ProductSearchSheet({
     super.key,
     required this.productosDisponibles,
     this.initialProduct,
+    this.isCda = false,
   });
 
   @override
@@ -96,12 +98,23 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
         unit: _unit,
         quantity: quantity,
         unitPrice: unitPrice,
+        isCda: widget.initialProduct?.isCdaProduct ?? widget.isCda,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final bool effectiveIsCda =
+        widget.initialProduct?.isCdaProduct ?? widget.isCda;
+    final String modalTitle = widget.initialProduct == null
+        ? (effectiveIsCda
+            ? 'Agregar Producto de CDA'
+            : 'Agregar Producto Propio')
+        : (effectiveIsCda
+            ? 'Editar Producto de CDA'
+            : 'Editar Producto Propio');
+
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -122,7 +135,7 @@ class _ProductSearchSheetState extends State<ProductSearchSheet> {
                 ),
               ),
               Text(
-                widget.initialProduct == null ? 'Agregar Producto' : 'Editar Producto',
+                modalTitle,
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 20),

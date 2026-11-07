@@ -35,8 +35,12 @@ class Product {
   final int quantity;
   final double unitPrice;
   final UnitType unit;
+  final bool isCda;
 
   double get subtotal => quantity * unitPrice;
+
+  bool get isCdaProduct =>
+      isCda || name.toUpperCase().contains("CENTRAL DE ABASTOS");
 
   const Product({
     required this.id,
@@ -44,6 +48,7 @@ class Product {
     required this.quantity,
     required this.unitPrice,
     required this.unit,
+    this.isCda = false,
   });
 
   Product copyWith({
@@ -52,6 +57,7 @@ class Product {
     int? quantity,
     double? unitPrice,
     UnitType? unit,
+    bool? isCda,
   }) {
     return Product(
       id: id ?? this.id,
@@ -59,6 +65,7 @@ class Product {
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       unit: unit ?? this.unit,
+      isCda: isCda ?? this.isCda,
     );
   }
 
@@ -69,16 +76,21 @@ class Product {
       'quantity': quantity,
       'unitPrice': unitPrice,
       'unit': unit.index, // Guardar el índice del enum
+      'isCda': isCda,
     };
   }
 
   factory Product.fromJson(Map<String, dynamic> json) {
+    final String name = json['name'] as String;
+    final bool isCdaFromJson = (json['isCda'] as bool?) ??
+        name.toUpperCase().contains("CENTRAL DE ABASTOS");
     return Product(
       id: json['id'] as String,
-      name: json['name'] as String,
+      name: name,
       quantity: json['quantity'] as int,
-      unitPrice: json['unitPrice'] as double,
+      unitPrice: (json['unitPrice'] as num).toDouble(),
       unit: UnitType.values[json['unit'] as int], // Restaurar el enum por índice
+      isCda: isCdaFromJson,
     );
   }
 
@@ -91,9 +103,15 @@ class Product {
           name == other.name &&
           quantity == other.quantity &&
           unitPrice == other.unitPrice &&
-          unit == other.unit;
+          unit == other.unit &&
+          isCda == other.isCda;
 
   @override
   int get hashCode =>
-      id.hashCode ^ name.hashCode ^ quantity.hashCode ^ unitPrice.hashCode ^ unit.hashCode;
+      id.hashCode ^
+      name.hashCode ^
+      quantity.hashCode ^
+      unitPrice.hashCode ^
+      unit.hashCode ^
+      isCda.hashCode;
 }

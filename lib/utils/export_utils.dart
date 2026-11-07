@@ -16,12 +16,13 @@ import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import '../models/product.dart';
 import '../data/units.dart';
+import '../data/product_mapping.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 import '../models/managed_list.dart';
 
-// --- (Sin cambios en _generateCsvInBackground ni _escapeCsvField) ---
+// --- Consolida productos propios y de CDA para que en el CSV salgan sumados con normalidad ---
 Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
   final List<Product> items = data['items'];
   final String puntoId = data['puntoId'];
@@ -43,11 +44,41 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
     "UsuarioApp",
   ];
 
-  // --- REQ 1: ESTO YA FUNCIONA ---
-  // Como `items` (que es la `ManagedList.products`) ya tiene el ID correcto
-  // y el nombre original de CDA, esta función generará el CSV
-  // exactamente como lo pediste.
-  final rows = items.map((p) {
+  // Consolidar productos (Propio + CDA) que tengan el mismo ID, unidad y precio unitario,
+  // usando el nombre normal del catálogo.
+  final List<Product> consolidatedItems = [];
+  for (final p in items) {
+    String cleanName = p.name;
+    if (cleanName.toUpperCase().contains("CENTRAL DE ABASTOS")) {
+      final mapped = productNormalizationMap[cleanName.trim().toUpperCase()];
+      if (mapped != null) {
+        cleanName = mapped;
+      } else {
+        cleanName = cleanName
+            .replaceAll(
+                RegExp(r'\s*\(CENTRAL DE ABASTOS\)', caseSensitive: false), '')
+            .trim();
+      }
+    }
+
+    final existingIndex = consolidatedItems.indexWhere(
+      (existing) =>
+          existing.id == p.id &&
+          existing.unitPrice == p.unitPrice &&
+          existing.unit == p.unit,
+    );
+
+    if (existingIndex != -1) {
+      final existing = consolidatedItems[existingIndex];
+      consolidatedItems[existingIndex] = existing.copyWith(
+        quantity: existing.quantity + p.quantity,
+      );
+    } else {
+      consolidatedItems.add(p.copyWith(name: cleanName, isCda: false));
+    }
+  }
+
+  final rows = consolidatedItems.map((p) {
     final effectiveUnitPrice = p.unitPrice;
     final mapping = unitMapping[p.unit]!;
     final totalProducto = (p.quantity * effectiveUnitPrice).toStringAsFixed(2);
@@ -56,7 +87,7 @@ Future<Uint8List> _generateCsvInBackground(Map<String, dynamic> data) async {
       _escapeCsvField(puntoId),
       _escapeCsvField(csvFecha),
       _escapeCsvField(p.id),
-      _escapeCsvField(p.name), // <-- Usará el nombre de CDA
+      _escapeCsvField(p.name),
       _escapeCsvField(totalProducto),
       _escapeCsvField(effectiveUnitPrice.toStringAsFixed(2)),
       _escapeCsvField(p.quantity.toString()),
@@ -116,13 +147,9 @@ Future<Uint8List> _generateProductListPdf(List<Product> products,
       products.fold(0.0, (sum, p) => sum + (p.quantity * p.unitPrice));
   final currencyFormat = NumberFormat.currency(symbol: '\$', decimalDigits: 2);
 
-  // --- CAMBIO: Separar y ordenar listas ---
-  final cdaProducts = products
-      .where((p) => p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
-      .toList();
-  final regularProducts = products
-      .where((p) => !p.name.toUpperCase().contains("CENTRAL DE ABASTOS"))
-      .toList();
+  // --- CAMBIO: Separar y ordenar listas usando isCdaProduct ---
+  final cdaProducts = products.where((p) => p.isCdaProduct).toList();
+  final regularProducts = products.where((p) => !p.isCdaProduct).toList();
 
   regularProducts
       .sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));

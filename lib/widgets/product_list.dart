@@ -1,5 +1,7 @@
+// lib/widgets/product_list.dart
+
 import 'package:flutter/material.dart';
-import '../models/product.dart';
+import 'package:flutter_listados/models/product.dart';
 
 class ProductList extends StatelessWidget {
   final List<Product> items;
@@ -30,7 +32,6 @@ class ProductList extends StatelessWidget {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // 💡 Sección del producto: Separamos los widgets para evitar overflow
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -44,7 +45,6 @@ class ProductList extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 8),
-                      // 💡 Usamos una fila para la cantidad y la unidad
                       Row(
                         children: [
                           Text(
@@ -78,7 +78,6 @@ class ProductList extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Sección del subtotal y botones
                 Row(
                   children: [
                     Text(

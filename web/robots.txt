@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://agro-listado-modoexcel.netlify.app/sitemap.xml

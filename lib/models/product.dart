@@ -1,4 +1,6 @@
-// Archivo: models/product.dart
+// lib/models/product.dart
+// ... (Aquí iría la definición de Product y UnitType)
+// ignore_for_file: constant_identifier_names
 
 enum UnitType {
   Unidad,
@@ -30,43 +32,86 @@ enum UnitType {
 class Product {
   final String id;
   final String name;
+  final int quantity;
   final double unitPrice;
   final UnitType unit;
-  final int quantity;
+  final bool isCda;
 
-  Product({
+  double get subtotal => quantity * unitPrice;
+
+  bool get isCdaProduct =>
+      isCda || name.toUpperCase().contains("CENTRAL DE ABASTOS");
+
+  const Product({
     required this.id,
     required this.name,
+    required this.quantity,
     required this.unitPrice,
     required this.unit,
-    required this.quantity,
+    this.isCda = false,
   });
 
-  double get subtotal => unitPrice * quantity;
+  Product copyWith({
+    String? id,
+    String? name,
+    int? quantity,
+    double? unitPrice,
+    UnitType? unit,
+    bool? isCda,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      unit: unit ?? this.unit,
+      isCda: isCda ?? this.isCda,
+    );
+  }
 
-  // Convierte un objeto Product en un Map para serializarlo
   Map<String, dynamic> toJson() {
     return {
       'id': id,
       'name': name,
-      'unitPrice': unitPrice,
-      'unit': unit.index, // Guarda el enum como un índice entero
       'quantity': quantity,
+      'unitPrice': unitPrice,
+      'unit': unit.index, // Guardar el índice del enum
+      'isCda': isCda,
     };
   }
 
-  // Crea un objeto Product a partir de un Map (desde un JSON)
   factory Product.fromJson(Map<String, dynamic> json) {
+    final String name = json['name'] as String;
+    final bool isCdaFromJson = (json['isCda'] as bool?) ??
+        name.toUpperCase().contains("CENTRAL DE ABASTOS");
     return Product(
       id: json['id'] as String,
-      name: json['name'] as String,
-      unitPrice: json['unitPrice'] is int
-          ? (json['unitPrice'] as int).toDouble()
-          : json['unitPrice'] as double,
-      unit: UnitType.values[json['unit'] as int],
-      quantity: json['quantity'] is int
-          ? (json['quantity'] as int).toInt()
-          : json['quantity'] as int,
+      name: name,
+      quantity: json['quantity'] as int,
+      unitPrice: (json['unitPrice'] as num).toDouble(),
+      unit: UnitType.values[json['unit'] as int], // Restaurar el enum por índice
+      isCda: isCdaFromJson,
     );
   }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Product &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          quantity == other.quantity &&
+          unitPrice == other.unitPrice &&
+          unit == other.unit &&
+          isCda == other.isCda;
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      quantity.hashCode ^
+      unitPrice.hashCode ^
+      unit.hashCode ^
+      isCda.hashCode;
 }
